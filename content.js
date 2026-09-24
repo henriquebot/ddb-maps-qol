@@ -14,7 +14,6 @@
   const PENDING_KEY = "ddbQolPendingMonsterImportV2";
   const PREFILL_KEY = "ddbQolMonsterPrefillV2";
   const CREATURE_CATEGORY_ID = 1;
-  const PARSER_JS_URL = `${SRC_ROOT}js/parser.js`;
   const FIVE_TOOLS_BESTIARY_URL = "https://5e.tools/bestiary.html";
   const SETTINGS_KEY = "ddbQolSettingsV3";
   const DEFAULT_SETTINGS = { hbButtons: true, damageApplicator: true, extendedBestiary: true, mapSearch: true, customStickers: true };
@@ -1204,38 +1203,8 @@
     });
   }
 
-  function fetchTextUrl(url) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: "DDB_QOL_FETCH_TEXT", url }, response => {
-        if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
-        if (!response?.ok) return reject(new Error(response?.error || "Falha ao consultar texto do 5etools."));
-        resolve(response.text);
-      });
-    });
-  }
-
   async function fetch5eJson(file) {
     return fetchJsonUrl(`${BESTIARY_BASE}${file}`);
-  }
-
-  function decodeJsQuoted(value) {
-    try { return JSON.parse(`"${String(value).replace(/"/g, '\\"')}"`); } catch (_e) { return String(value); }
-  }
-
-  function parseOfficialSourceNames(parserJs) {
-    const constants = new Map();
-    const fullNames = new Map();
-    const constRe = /Parser\.SRC_([A-Za-z0-9_]+)\s*=\s*"((?:\\.|[^"\\])*)"\s*;/g;
-    const fullRe = /Parser\.SOURCE_JSON_TO_FULL\[Parser\.SRC_([A-Za-z0-9_]+)\]\s*=\s*"((?:\\.|[^"\\])*)"\s*;/g;
-    const directRe = /Parser\.SOURCE_JSON_TO_FULL\["((?:\\.|[^"\\])*)"\]\s*=\s*"((?:\\.|[^"\\])*)"\s*;/g;
-    let m;
-    while ((m = constRe.exec(parserJs))) constants.set(m[1], decodeJsQuoted(m[2]));
-    while ((m = fullRe.exec(parserJs))) {
-      const source = constants.get(m[1]);
-      if (source) fullNames.set(source, decodeJsQuoted(m[2]));
-    }
-    while ((m = directRe.exec(parserJs))) fullNames.set(decodeJsQuoted(m[1]), decodeJsQuoted(m[2]));
-    return fullNames;
   }
 
   function get5eToolsMonsterUrl(hit) {
@@ -1351,8 +1320,7 @@
         fetchJsonUrl(`${SEARCH_BASE}index.json`),
         fetchJsonUrl(`${SEARCH_BASE}index-partnered.json`),
         fetch5eJson("index.json"),
-        fetchJsonUrl(`${HOMEBREW_ROOT}_generated/index-sources.json`),
-        fetchTextUrl(PARSER_JS_URL).catch(() => "")
+        fetchJsonUrl(`${HOMEBREW_ROOT}_generated/index-sources.json`)
       ];
       if (SETTINGS.extendedBestiary !== false) {
         requests.push(
@@ -1363,17 +1331,18 @@
       }
 
       const base = await Promise.all(requests);
-      const [officialSearchRaw, partneredSearchRaw, officialBestiaryIndex, homebrewSourceIndex, parserJs] = base;
-      const homebrewProps = base[5] || {};
-      const prereleaseProps = base[6] || {};
-      const prereleaseSourceIndex = base[7] || {};
+      const [officialSearchRaw, partneredSearchRaw, officialBestiaryIndex, homebrewSourceIndex] = base;
+      const homebrewProps = base[4] || {};
+      const prereleaseProps = base[5] || {};
+      const prereleaseSourceIndex = base[6] || {};
 
-      const officialSourceNames = parseOfficialSourceNames(parserJs || "");
       const toHit = (item, origin) => ({
         name: item.n || "",
         source: item.s || "",
         sourceAbbrev: item.sA || item.s || "",
-        sourceFull: item.sF || officialSourceNames.get(item.s) || item.s || "",
+        // Search indexes already expose sF when a full source label is available.
+        // Do not download/parse remote JavaScript just to expand source names.
+        sourceFull: item.sF || item.s || "",
         page: item.p ?? "",
         hash: item.u || "",
         media: item.m || "",
