@@ -1,0 +1,49 @@
+name: Import stable v0.3.32 baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".bootstrap/archive.b64"
+      - ".github/workflows/import-baseline.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild stable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .bootstrap/archive.b64 > /tmp/ddb-maps-qol-v0.3.32.zip
+          unzip -tq /tmp/ddb-maps-qol-v0.3.32.zip
+          rm -rf /tmp/ddb-import
+          mkdir -p /tmp/ddb-import
+          unzip -q /tmp/ddb-maps-qol-v0.3.32.zip -d /tmp/ddb-import
+          src="/tmp/ddb-import/ddb-maps-qol-v0.3.32"
+          test -f "$src/manifest.json"
+          python - <<'PY'
+          import json
+          with open("/tmp/ddb-import/ddb-maps-qol-v0.3.32/manifest.json", encoding="utf-8") as f:
+              m = json.load(f)
+          assert m.get("version") == "0.3.32", m.get("version")
+          PY
+          cp -a "$src"/. .
+          rm -rf .bootstrap
+          rm -f .github/workflows/import-baseline.yml
+
+      - name: Commit imported baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: import stable v0.3.32 baseline"
+          git push
