@@ -146,6 +146,36 @@
 }
 .ddb-qol-apply-damage-button:hover { filter: brightness(1.15); }
 
+/* Game Log — ação direta para exatamente 1 token selecionado */
+.ddb-qol-quick-log-damage-button {
+  position: absolute !important;
+  right: 40px !important;
+  transform: translateY(-50%) !important;
+  z-index: 30 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 39px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 6px !important;
+  margin: 0 !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 14px !important;
+  background: #7a242a !important;
+  color: #fff !important;
+  font: 900 11px/1 Arial,sans-serif !important;
+  letter-spacing: .1px !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4) !important;
+}
+.ddb-qol-quick-log-damage-button:hover { filter: brightness(1.15); }
+.ddb-qol-quick-log-damage-button:disabled { cursor: wait !important; opacity: .72 !important; }
+.ddb-qol-quick-log-damage-button[hidden] { display: none !important; }
+.ddb-qol-quick-log-damage-button.ddb-qol-quick-log-success { background: #27673a !important; }
+.ddb-qol-quick-log-damage-button.ddb-qol-quick-log-error { background: #8b1f26 !important; }
+
 .ddb-qol-modal-backdrop {
   position: fixed;
   inset: 0;
