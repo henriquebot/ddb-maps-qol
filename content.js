@@ -4554,8 +4554,8 @@
   const CUSTOM_STICKERS_KEY = "ddbQolCustomStickersV1";
   const CUSTOM_STICKER_INSTANCES_KEY = "ddbQolCustomStickerInstancesV1";
   const CUSTOM_STICKER_TOMBSTONES_KEY = "ddbQolCustomStickerTombstonesV1";
-  const MAP_THUMB_CACHE_KEY = "ddbQolMapThumbCacheV2";
-  const OLD_MAP_THUMB_CACHE_KEY = "ddbQolMapThumbCacheV1";
+  const MAP_THUMB_CACHE_KEY = "ddbQolMapThumbCacheV3";
+  const OLD_MAP_THUMB_CACHE_KEYS = ["ddbQolMapThumbCacheV2", "ddbQolMapThumbCacheV1"];
   let mapThumbCache = null;
   let mapSearchValue = "";
   let mapSortDirection = "desc";
@@ -4593,9 +4593,11 @@
     if (mapThumbCache) return mapThumbCache;
     const stored = await getStorage(MAP_THUMB_CACHE_KEY).catch(() => null);
     mapThumbCache = stored && typeof stored === "object" ? stored : {};
-    // V1 used a name/DOM-image heuristic that could associate the wrong image
-    // with a map. Never migrate it into the strict V2 cache.
-    await removeStorage(OLD_MAP_THUMB_CACHE_KEY).catch(() => {});
+    // Older caches may contain a name/DOM-image association from before the
+    // identity-safe matching. Never migrate them into the strict V3 cache.
+    for (const oldKey of OLD_MAP_THUMB_CACHE_KEYS) {
+      await removeStorage(oldKey).catch(() => {});
+    }
     return mapThumbCache;
   }
 
@@ -4623,10 +4625,9 @@
     for (const label of labels) {
       const name = mapOptionName(label);
       const key = mapThumbCacheKey(label, name);
-      // Only trust a URL explicitly annotated from the native map metadata.
-      // Never guess from nearby DOM images: that was the source of mismatched thumbs.
+      // Only trust a URL explicitly annotated from native map metadata.
+      // Nearby DOM images can belong to another option or UI control.
       let url = String(label.dataset.ddbQolMapThumb || "").trim();
-      if (!url) url = directMapLabelImageUrl(label);
       if (url) {
         if (cache[key] !== url) { cache[key] = url; changed = true; }
       } else if (cache[key]) {
