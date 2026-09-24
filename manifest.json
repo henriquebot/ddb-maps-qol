@@ -1,0 +1,75 @@
+{
+  "manifest_version": 3,
+  "name": "DDB Maps QoL",
+  "version": "0.3.32",
+  "description": "Ferramentas de qualidade de vida para D&D Beyond Maps: importador 5etools, Token Maker, Damage Applicator, stickers personalizados e busca de mapas.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.dndbeyond.com/api/*",
+    "https://auth-service.dndbeyond.com/*",
+    "https://character-service.dndbeyond.com/*",
+    "https://monster-service.dndbeyond.com/*",
+    "https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/*",
+    "https://raw.githubusercontent.com/5etools-mirror-2/5etools-img/*",
+    "https://raw.githubusercontent.com/TheGiddyLimit/homebrew/*",
+    "https://raw.githubusercontent.com/TheGiddyLimit/homebrew-img/*",
+    "https://raw.githubusercontent.com/TheGiddyLimit/unearthed-arcana/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.dndbeyond.com/games/*"
+      ],
+      "js": [
+        "page-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.dndbeyond.com/games/*",
+        "https://www.dndbeyond.com/homebrew/creations/create-monster/create*",
+        "https://www.dndbeyond.com/homebrew/creations/monsters/*/edit*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://5e.tools/bestiary.html*",
+        "https://5etools.com/bestiary.html*",
+        "https://5etools-mirror-3.github.io/bestiary.html*"
+      ],
+      "js": [
+        "five-tools.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "DDB Maps QoL",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

@@ -1,0 +1,1071 @@
+#ddb-qol-importer {
+  margin: 0 0 22px;
+  padding: 16px;
+  border: 1px solid #b9b3a6;
+  border-radius: 7px;
+  background: #f7f5f0;
+  color: #242424;
+}
+
+.ddb-qol-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ddb-qol-head strong { display: block; font-size: 18px; }
+.ddb-qol-head small { display: block; margin-top: 2px; opacity: .7; }
+.ddb-qol-badge { padding: 4px 7px; border-radius: 999px; background: #242424; color: white; font-size: 11px; }
+.ddb-qol-controls { display: grid; grid-template-columns: 1fr 120px; gap: 10px; margin-bottom: 10px; }
+.ddb-qol-controls label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; }
+.ddb-qol-controls select,
+#ddb-qol-monster-search {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: white;
+  color: #222;
+}
+.ddb-qol-status { margin: 8px 0; font-size: 12px; opacity: .72; }
+.ddb-qol-results { display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+.ddb-qol-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid #ddd7ca; border-radius: 5px; background: white; }
+.ddb-qol-result-info { min-width: 0; }
+.ddb-qol-result-info strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ddb-qol-result-info small { display: block; opacity: .65; }
+.ddb-qol-result button { flex: none; padding: 7px 10px; cursor: pointer; }
+.ddb-qol-result button:disabled { cursor: not-allowed; opacity: .55; }
+.ddb-qol-empty { padding: 12px; text-align: center; opacity: .65; }
+.ddb-qol-finisher { position: fixed; right: 18px; bottom: 18px; z-index: 2147483647; max-width: 420px; padding: 12px 15px; border-radius: 6px; background: #202020; color: white; box-shadow: 0 8px 30px rgba(0,0,0,.35); font: 14px/1.4 Arial,sans-serif; }
+.ddb-qol-success { background: #285d36; }
+.ddb-qol-error { background: #8b2e2e; }
+
+/* Atalho exibido sobre monstros bloqueados/indisponíveis no Token Browser. */
+.ddb-qol-hb-button {
+  position: absolute !important;
+  right: 6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 2147483000 !important;
+  pointer-events: auto !important;
+  min-width: 38px !important;
+  height: 24px !important;
+  padding: 0 7px !important;
+  border: 1px solid rgba(255,255,255,.2) !important;
+  border-radius: 5px !important;
+  background: #b61920 !important;
+  color: #fff !important;
+  font: 700 11px/22px Arial, sans-serif !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+  box-shadow: 0 2px 7px rgba(0,0,0,.35) !important;
+}
+
+.ddb-qol-hb-button:hover { filter: brightness(1.15); }
+
+.ddb-qol-5e-button {
+  position: absolute !important;
+  right: 50px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 2147483001 !important;
+  pointer-events: auto !important;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 5px !important;
+  background: #2369c8 !important;
+  color: #fff !important;
+  font: 800 11px/22px Arial,sans-serif !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+  box-shadow: 0 2px 7px rgba(0,0,0,.35) !important;
+}
+.ddb-qol-5e-button:hover { filter: brightness(1.15); }
+
+@media (max-width: 760px) {
+  .ddb-qol-controls { grid-template-columns: 1fr; }
+}
+
+.ddb-qol-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.ddb-qol-result-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid #b9b3a6;
+  border-radius: 4px;
+  background: #f7f5f0;
+  color: #222;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ddb-qol-result-actions a:hover {
+  background: #ece8df;
+  text-decoration: none;
+}
+
+/* v0.3.0 — Damage Applicator */
+.ddb-qol-apply-damage-button {
+  position: absolute !important;
+  right: 7px !important;
+  transform: translateY(-50%) !important;
+  z-index: 30 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 50% !important;
+  background: #b51f27 !important;
+  color: #fff !important;
+  font: 900 17px/1 Arial,sans-serif !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4) !important;
+}
+.ddb-qol-apply-damage-button:hover { filter: brightness(1.15); }
+
+.ddb-qol-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0,0,0,.62);
+  font: 13px/1.35 Arial,sans-serif;
+}
+.ddb-qol-modal {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: auto;
+  border: 1px solid #555;
+  border-radius: 10px;
+  background: #222;
+  color: #f4f4f4;
+  box-shadow: 0 18px 60px rgba(0,0,0,.55);
+}
+.ddb-qol-modal-head,
+.ddb-qol-modal-footer,
+.ddb-qol-damage-type-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.ddb-qol-modal-head { border-bottom: 1px solid #444; justify-content: space-between; }
+.ddb-qol-modal-head strong { display:block; font-size:16px; }
+.ddb-qol-modal-head small { display:block; opacity:.7; margin-top:2px; }
+.ddb-qol-modal-close {
+  width: 32px; height: 32px; border: 0; border-radius: 5px;
+  background: transparent; color: #fff; font-size: 24px; cursor: pointer;
+}
+.ddb-qol-damage-type-row { border-bottom: 1px solid #383838; }
+.ddb-qol-damage-type-row label { display:flex; align-items:center; gap:8px; font-weight:700; }
+.ddb-qol-damage-type-row select,
+.ddb-qol-damage-type-row button,
+.ddb-qol-defence-mode,
+.ddb-qol-defense-mode,
+.ddb-qol-modal-footer button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid #666;
+  border-radius: 5px;
+  background: #333;
+  color: #fff;
+}
+.ddb-qol-damage-type-row button { margin-left:auto; cursor:pointer; }
+.ddb-qol-damage-note { padding: 8px 14px; opacity:.68; font-size:11px; }
+.ddb-qol-target-list { display:grid; gap:6px; padding: 4px 14px 14px; }
+.ddb-qol-target-row {
+  display:grid;
+  grid-template-columns: 22px minmax(140px,1fr) 155px 55px;
+  gap:8px;
+  align-items:center;
+  padding:8px 10px;
+  border:1px solid #444;
+  border-radius:6px;
+  background:#292929;
+}
+.ddb-qol-target-name strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ddb-qol-target-name small { display:block; opacity:.64; margin-top:2px; }
+.ddb-qol-defense-mode { width:100%; }
+.ddb-qol-final-damage { text-align:right; font-weight:800; font-size:16px; }
+.ddb-qol-modal-footer { border-top:1px solid #444; justify-content:flex-end; position:sticky; bottom:0; background:#222; }
+.ddb-qol-modal-footer span { margin-right:auto; max-width:340px; font-size:11px; opacity:.8; }
+.ddb-qol-modal-footer button { cursor:pointer; }
+.ddb-qol-modal-footer .ddb-qol-primary { background:#a41f26; border-color:#c64249; font-weight:800; }
+.ddb-qol-modal-footer button:disabled { opacity:.5; cursor:wait; }
+
+@media (max-width: 620px) {
+  .ddb-qol-target-row { grid-template-columns: 22px 1fr 48px; }
+  .ddb-qol-defense-mode { grid-column: 2 / 4; }
+}
+.ddb-qol-return-maps { margin-left:8px; padding:4px 7px; border:1px solid rgba(255,255,255,.35); border-radius:4px; background:rgba(255,255,255,.12); color:#fff; cursor:pointer; font-weight:700; }
+
+/* v0.3.4 — busca de mapas */
+.ddb-qol-map-search-wrap {
+  display:flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  padding:8px !important;
+  border-bottom:1px solid rgba(255,255,255,.12) !important;
+  background:#232323 !important;
+  position:sticky !important;
+  top:0 !important;
+  z-index:12 !important;
+}
+.ddb-qol-map-search {
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  height:32px !important;
+  padding:0 9px !important;
+  border:1px solid #666 !important;
+  border-radius:5px !important;
+  background:#171717 !important;
+  color:#fff !important;
+  font:13px Arial,sans-serif !important;
+  outline:none !important;
+}
+.ddb-qol-map-search:focus { border-color:#9f9f9f !important; }
+.ddb-qol-map-order-button {
+  flex:none !important;
+  min-height:30px !important;
+  padding:0 8px !important;
+  border:1px solid #555 !important;
+  border-radius:5px !important;
+  background:#2d2d2d !important;
+  color:#d8d8d8 !important;
+  font:700 10px Arial,sans-serif !important;
+  white-space:nowrap !important;
+  cursor:pointer !important;
+}
+.ddb-qol-map-order-button:hover { background:#3a3a3a !important; color:#fff !important; }
+
+/* v0.3.4 — stickers customizados */
+.ddb-qol-sticker-launcher {
+  position:fixed !important;
+  right:18px !important;
+  bottom:86px !important;
+  z-index:2147483000 !important;
+  height:34px !important;
+  padding:0 12px !important;
+  border:1px solid rgba(255,255,255,.22) !important;
+  border-radius:7px !important;
+  background:#2258a7 !important;
+  color:#fff !important;
+  box-shadow:0 4px 14px rgba(0,0,0,.35) !important;
+  font:800 12px Arial,sans-serif !important;
+  cursor:pointer !important;
+}
+.ddb-qol-sticker-launcher:hover { filter:brightness(1.12); }
+.ddb-qol-sticker-panel {
+  position:fixed !important;
+  right:18px !important;
+  bottom:128px !important;
+  z-index:2147483001 !important;
+  width:min(360px, calc(100vw - 36px)) !important;
+  max-height:min(560px, calc(100vh - 170px)) !important;
+  overflow:auto !important;
+  border:1px solid #555 !important;
+  border-radius:10px !important;
+  background:#202020 !important;
+  color:#fff !important;
+  box-shadow:0 14px 44px rgba(0,0,0,.5) !important;
+  font:12px/1.35 Arial,sans-serif !important;
+}
+.ddb-qol-sticker-panel[hidden] { display:none !important; }
+.ddb-qol-sticker-panel-head {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  padding:10px 12px !important;
+  border-bottom:1px solid #444 !important;
+}
+.ddb-qol-sticker-panel-head strong { font-size:14px !important; }
+.ddb-qol-sticker-panel-head button {
+  border:0 !important;
+  background:transparent !important;
+  color:#fff !important;
+  font-size:21px !important;
+  cursor:pointer !important;
+}
+.ddb-qol-sticker-panel-tools { padding:10px 12px 6px !important; }
+.ddb-qol-sticker-panel-tools button {
+  width:100% !important;
+  min-height:34px !important;
+  border:1px solid #4978bd !important;
+  border-radius:6px !important;
+  background:#245da9 !important;
+  color:#fff !important;
+  font-weight:800 !important;
+  cursor:pointer !important;
+}
+.ddb-qol-sticker-hint { padding:0 12px 9px !important; opacity:.68 !important; font-size:10px !important; }
+.ddb-qol-sticker-grid {
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:8px !important;
+  padding:6px 12px 12px !important;
+}
+.ddb-qol-sticker-empty { grid-column:1/-1 !important; padding:16px 8px !important; text-align:center !important; opacity:.65 !important; }
+.ddb-qol-sticker-card {
+  min-width:0 !important;
+  padding:7px !important;
+  border:1px solid #444 !important;
+  border-radius:7px !important;
+  background:#292929 !important;
+}
+.ddb-qol-sticker-card img,
+.ddb-qol-sticker-card video {
+  display:block !important;
+  width:100% !important;
+  height:90px !important;
+  object-fit:contain !important;
+  border-radius:5px !important;
+  background:#151515 !important;
+}
+.ddb-qol-sticker-card-name {
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+  margin:6px 0 !important;
+  font-weight:700 !important;
+}
+.ddb-qol-sticker-card-actions { display:grid !important; grid-template-columns:1fr 1fr 30px !important; gap:5px !important; }
+.ddb-qol-sticker-card-actions button {
+  min-height:28px !important;
+  border:1px solid #555 !important;
+  border-radius:5px !important;
+  background:#363636 !important;
+  color:#fff !important;
+  cursor:pointer !important;
+}
+.ddb-qol-sticker-card-actions button[data-act="place"],
+.ddb-qol-sticker-card-actions button[data-act="place-hidden"] { width:100% !important; padding:0 6px !important; }
+.ddb-qol-sticker-card-actions button[data-act="place-hidden"] { background:#2d3a4c !important; }
+.ddb-qol-sticker-card-actions button[data-act="delete"] { width:30px !important; }
+.ddb-qol-sticker-toast {
+  position:fixed !important;
+  right:18px !important;
+  bottom:48px !important;
+  z-index:2147483647 !important;
+  max-width:360px !important;
+  padding:9px 12px !important;
+  border-radius:6px !important;
+  background:#245d35 !important;
+  color:#fff !important;
+  box-shadow:0 6px 24px rgba(0,0,0,.4) !important;
+  font:700 12px Arial,sans-serif !important;
+}
+.ddb-qol-sticker-toast[hidden] { display:none !important; }
+.ddb-qol-sticker-toast-error { background:#8c252a !important; }
+
+/* v0.3.5 — ajustes visuais */
+.ddb-qol-result-token {
+  flex: 0 0 42px !important;
+  width: 42px !important;
+  height: 42px !important;
+  object-fit: contain !important;
+  border-radius: 50% !important;
+  background: #ece8df !important;
+  border: 1px solid #d7d0c3 !important;
+}
+.ddb-qol-result-token[hidden] { display: none !important; }
+.ddb-qol-result-info { flex: 1 1 auto !important; min-width: 0 !important; }
+
+/* 5eTools: fica na mesma coluna dos controles nativos/+HB, logo abaixo. */
+.ddb-qol-5e-button {
+  right: 6px !important;
+  top: calc(50% + 15px) !important;
+  transform: none !important;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 20px !important;
+  font: 800 10px/18px Arial,sans-serif !important;
+}
+
+/* Damage Applicator: botão no gutter à direita do box de rolagem. */
+.ddb-qol-apply-damage-button {
+  right: -35px !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  border-radius: 7px !important;
+  background: #b51f27 !important;
+}
+.ddb-qol-apply-damage-button svg {
+  width: 14px !important;
+  height: 14px !important;
+  display: block !important;
+  fill: #fff !important;
+}
+
+.ddb-qol-apply-damage-button[style*="left"] { right: auto !important; }
+
+
+/* v0.3.6 — UX stabilization */
+.ddb-qol-hb-button {
+  right: 6px !important;
+  top: calc(50% - 22px) !important;
+  transform: none !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  font: 800 10px/18px Arial,sans-serif !important;
+}
+.ddb-qol-5e-button {
+  right: 6px !important;
+  top: calc(50% + 3px) !important;
+  transform: none !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  font: 800 10px/18px Arial,sans-serif !important;
+}
+.ddb-qol-5e-button:not(.ddb-qol-5e-with-hb) { top: calc(50% + 12px) !important; }
+
+.ddb-qol-target-row {
+  grid-template-columns: 22px 38px minmax(140px,1fr) 155px 55px !important;
+}
+.ddb-qol-target-avatar {
+  width: 34px !important;
+  height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  border-radius: 50% !important;
+  border: 1px solid #555 !important;
+  background: #181818 !important;
+  font-weight: 800 !important;
+  opacity: .9 !important;
+}
+.ddb-qol-target-avatar img { width:100% !important; height:100% !important; object-fit:cover !important; }
+
+/* Sticker launcher is positioned beside the current-map selector in the top header. */
+.ddb-qol-sticker-launcher {
+  position: static !important;
+  left: auto !important; right: auto !important; bottom: auto !important;
+  width: 34px !important; min-width:34px !important; height:34px !important;
+  padding: 0 !important; margin: 0 4px 0 0 !important;
+  display:inline-flex !important; align-items:center !important; justify-content:center !important;
+  border:1px solid rgba(255,255,255,.22) !important;
+  border-radius:7px !important;
+  background:#2c2c2c !important; color:#fff !important;
+  box-shadow:0 2px 7px rgba(0,0,0,.28) !important;
+}
+.ddb-qol-sticker-launcher svg { width:20px !important; height:20px !important; fill:none !important; stroke:currentColor !important; stroke-width:1.8 !important; stroke-linecap:round !important; stroke-linejoin:round !important; }
+.ddb-qol-sticker-panel { position:fixed !important; right:auto !important; z-index:2147483001 !important; }
+.ddb-qol-sticker-toast { left:18px !important; right:auto !important; bottom:60px !important; }
+
+@media (max-width: 620px) {
+  .ddb-qol-target-row { grid-template-columns: 22px 34px 1fr 48px !important; }
+  .ddb-qol-defense-mode { grid-column: 3 / 5 !important; }
+}
+
+
+/* v0.3.7 — launcher fora da árvore React; alinhamento final do Token Browser */
+.ddb-qol-sticker-launcher,
+.ddb-qol-sticker-launcher.ddb-qol-sticker-toolbar-button,
+.ddb-qol-sticker-launcher.ddb-qol-sticker-fallback {
+  position: fixed !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 2147483000 !important;
+}
+.ddb-qol-map-order-button:disabled {
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+  filter: none !important;
+}
+
+/* v0.3.9 — action rail + defense status inline */
+.ddb-qol-row-action-stack {
+  position: absolute !important;
+  right: 6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 3px !important;
+  width: 34px !important;
+  z-index: 2147483002 !important;
+  pointer-events: none !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-hb-button,
+.ddb-qol-row-action-stack > .ddb-qol-5e-button {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  pointer-events: auto !important;
+  font: 800 10px/18px Arial,sans-serif !important;
+}
+.ddb-qol-defense-summary {
+  display: inline !important;
+  margin-left: 2px !important;
+  opacity: .78 !important;
+  font-size: 10px !important;
+  white-space: normal !important;
+}
+
+/* v0.3.12 — visibility is controlled by JS after current-map selector detection. */
+.ddb-qol-sticker-launcher.ddb-qol-sticker-toolbar-button { visibility: visible !important; }
+
+/* v0.3.12 — map thumbnails + stable custom sticker UI */
+.ddb-qol-map-option-with-thumb {
+  min-height: 48px !important;
+  align-items: center !important;
+}
+.ddb-qol-map-thumb {
+  flex: 0 0 54px !important;
+  width: 54px !important;
+  height: 36px !important;
+  margin: 4px 8px 4px 4px !important;
+  overflow: hidden !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(255,255,255,.15) !important;
+  background: #141414 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+}
+.ddb-qol-map-thumb img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+.ddb-qol-sticker-launcher.ddb-qol-sticker-toolbar-button {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.ddb-qol-sticker-panel {
+  bottom: auto !important;
+  overscroll-behavior: contain !important;
+}
+
+
+/* v0.3.12 — final UI alignment, batch saves, draggable custom stickers */
+.ddb-qol-damage-type-row {
+  flex-wrap: wrap !important;
+}
+.ddb-qol-damage-type-row label {
+  white-space: nowrap !important;
+}
+.ddb-qol-damage-type-row input[type="number"] {
+  width: 58px !important;
+  min-height: 32px !important;
+  padding: 5px 7px !important;
+  border: 1px solid #666 !important;
+  border-radius: 5px !important;
+  background: #333 !important;
+  color: #fff !important;
+}
+.ddb-qol-target-columns-head {
+  display: grid !important;
+  grid-template-columns: 22px 38px minmax(140px,1fr) 126px 155px 55px !important;
+  gap: 8px !important;
+  align-items: center !important;
+  padding: 5px 24px 2px !important;
+  opacity: .62 !important;
+  font: 700 9px/1.2 Arial,sans-serif !important;
+  text-transform: uppercase !important;
+}
+.ddb-qol-target-row {
+  grid-template-columns: 22px 38px minmax(140px,1fr) 126px 155px 55px !important;
+}
+.ddb-qol-save-flags {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 4px !important;
+  align-items: center !important;
+}
+.ddb-qol-save-flags label {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+  padding: 3px 2px !important;
+  border: 1px solid #505050 !important;
+  border-radius: 4px !important;
+  background: #242424 !important;
+  font: 700 9px Arial,sans-serif !important;
+  cursor: pointer !important;
+}
+.ddb-qol-save-flags input { margin: 0 !important; }
+.ddb-qol-save-result {
+  font-weight: 700 !important;
+  opacity: .9 !important;
+}
+#ddb-qol-roll-saves {
+  background: #31557a !important;
+  border-color: #557da4 !important;
+  font-weight: 800 !important;
+}
+
+.ddb-qol-row-action-stack,
+.ddb-qol-row-action-stack > .ddb-qol-hb-button,
+.ddb-qol-row-action-stack > .ddb-qol-5e-button,
+.ddb-qol-5e-button.ddb-qol-row-action-aligned {
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-hb-button,
+.ddb-qol-row-action-stack > .ddb-qol-5e-button,
+.ddb-qol-5e-button.ddb-qol-row-action-aligned {
+  height: 20px !important;
+  min-height: 20px !important;
+  padding: 0 !important;
+  font: 800 10px/18px Arial,sans-serif !important;
+}
+
+/* Header launcher: positioned by JS immediately after the current-map selector. */
+.ddb-qol-sticker-launcher,
+.ddb-qol-sticker-launcher.ddb-qol-sticker-toolbar-button {
+  border-radius: 6px !important;
+  background: #252b30 !important;
+  border: 1px solid rgba(255,255,255,.25) !important;
+  box-shadow: 0 2px 7px rgba(0,0,0,.32) !important;
+}
+.ddb-qol-sticker-card {
+  cursor: grab !important;
+  user-select: none !important;
+}
+.ddb-qol-sticker-card:active { cursor: grabbing !important; }
+.ddb-qol-sticker-drag-hint {
+  margin: 2px 0 7px !important;
+  padding: 5px 7px !important;
+  border-radius: 4px !important;
+  background: rgba(52,111,177,.18) !important;
+  color: #bdd8f6 !important;
+  text-align: center !important;
+  font: 700 10px Arial,sans-serif !important;
+}
+.ddb-qol-sticker-card-actions {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+.ddb-qol-sticker-hidden-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 28px !important;
+  cursor: pointer !important;
+  font-weight: 700 !important;
+}
+.ddb-qol-sticker-card-actions button[data-act="delete"] {
+  flex: 0 0 30px !important;
+}
+html.ddb-qol-sticker-drag-active,
+html.ddb-qol-sticker-drag-active * {
+  cursor: copy !important;
+}
+
+@media (max-width: 760px) {
+  .ddb-qol-target-columns-head { display: none !important; }
+  .ddb-qol-target-row {
+    grid-template-columns: 22px 34px minmax(120px,1fr) 48px !important;
+  }
+  .ddb-qol-save-flags { grid-column: 3 / 5 !important; }
+  .ddb-qol-defense-mode { grid-column: 3 / 5 !important; }
+}
+
+/* v0.3.13 — Damage/Save HUD: fixed chrome, only target list scrolls */
+.ddb-qol-modal {
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: min(780px, calc(100vh - 32px)) !important;
+}
+.ddb-qol-modal-head,
+.ddb-qol-damage-type-row,
+.ddb-qol-damage-note,
+.ddb-qol-target-columns-head,
+.ddb-qol-modal-footer {
+  flex: 0 0 auto !important;
+  position: relative !important;
+  z-index: 4 !important;
+  background: #222 !important;
+}
+.ddb-qol-target-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+}
+.ddb-qol-modal-footer {
+  position: relative !important;
+  bottom: auto !important;
+}
+
+/* Imported/homebrew stat block feature headings — visually match native Maps cards. */
+.ddb-qol-hb-feature-heading {
+  color: #c9b27a !important;
+  font-weight: 700 !important;
+  font-style: italic !important;
+}
+
+/* Token Browser: one consistent action column for all monster rows. */
+.ddb-qol-row-action-stack {
+  pointer-events: auto !important;
+}
+.ddb-qol-native-monster-action,
+.ddb-qol-row-action-stack > .ddb-qol-hb-button,
+.ddb-qol-row-action-stack > .ddb-qol-5e-button,
+.ddb-qol-5e-button.ddb-qol-row-action-aligned {
+  box-sizing: border-box !important;
+}
+
+/* v0.3.14 — Token Browser: one physical action rail, including DDB's own + */
+.ddb-qol-row-action-stack {
+  position:absolute !important;
+  left:auto !important;
+  right:12px !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  width:34px !important;
+  min-width:34px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  justify-content:center !important;
+  gap:4px !important;
+  z-index:12 !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-native-monster-action,
+.ddb-qol-row-action-stack > .ddb-qol-hb-button,
+.ddb-qol-row-action-stack > .ddb-qol-5e-button {
+  position:static !important;
+  inset:auto !important;
+  transform:none !important;
+  box-sizing:border-box !important;
+  width:34px !important;
+  min-width:34px !important;
+  max-width:34px !important;
+  height:22px !important;
+  min-height:22px !important;
+  max-height:22px !important;
+  margin:0 !important;
+  padding:0 !important;
+  line-height:20px !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-native-monster-action {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+/* Local save fallback result stays readable without widening rows. */
+.ddb-qol-save-result { font-size:9px !important; white-space:nowrap !important; }
+
+/* v0.3.15 — damage-only HUD, deterministic target columns, final action rail */
+.ddb-qol-damage-type-row {
+  flex-wrap: nowrap !important;
+}
+.ddb-qol-damage-type-row > button {
+  margin-left: auto !important;
+}
+.ddb-qol-target-columns-head {
+  grid-template-columns: 22px 38px minmax(180px,1fr) 155px 55px !important;
+}
+.ddb-qol-target-row {
+  grid-template-columns: 22px 38px minmax(180px,1fr) 155px 55px !important;
+}
+.ddb-qol-save-flags,
+.ddb-qol-save-result,
+#ddb-qol-roll-saves,
+#ddb-qol-save-ability,
+#ddb-qol-save-dc {
+  display: none !important;
+}
+
+/* All monster rows use one fixed action column. The row finder now chooses the
+   full-width row ancestor; these rules make native +, +HB and 5e occupy the
+   exact same 36px rail. */
+.ddb-qol-row-action-stack {
+  right: 10px !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  align-items: center !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-native-monster-action,
+.ddb-qol-row-action-stack > .ddb-qol-hb-button,
+.ddb-qol-row-action-stack > .ddb-qol-5e-button {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: center !important;
+  justify-self: center !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-native-monster-action {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+}
+.ddb-qol-row-action-stack > .ddb-qol-native-monster-action > * {
+  margin: auto !important;
+}
+
+@media (max-width: 760px) {
+  .ddb-qol-target-columns-head { display: none !important; }
+  .ddb-qol-target-row {
+    grid-template-columns: 22px 34px minmax(120px,1fr) 48px !important;
+  }
+  .ddb-qol-defense-mode { grid-column: 3 / 5 !important; }
+}
+
+/* v0.3.18 — Token Browser: keep the fixed action rail inside the existing row width. */
+.ddb-qol-monster-row-host {
+  box-sizing:border-box !important;
+  max-width:100% !important;
+  min-width:0 !important;
+}
+.ddb-qol-monster-row-host > *:not(.ddb-qol-row-action-stack) {
+  min-width:0 !important;
+}
+.ddb-qol-row-action-stack {
+  right:8px !important;
+}
+/* The extension must never introduce horizontal overflow in the Token Browser. */
+.ddb-qol-monster-row-host,
+.ddb-qol-monster-row-host * {
+  box-sizing:border-box !important;
+}
+
+.ddb-qol-token-browser-panel { overflow-x:hidden !important; }
+
+
+/* v0.3.23 — Token Maker do importer 5etools */
+.ddb-qol-token-maker-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 22px !important;
+  background: rgba(4, 7, 10, .78) !important;
+  backdrop-filter: blur(3px) !important;
+  box-sizing: border-box !important;
+}
+.ddb-qol-token-maker {
+  width: min(920px, calc(100vw - 36px)) !important;
+  max-height: calc(100vh - 36px) !important;
+  overflow: auto !important;
+  color: #eee !important;
+  background: #171b1f !important;
+  border: 1px solid #8e7338 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 24px 80px rgba(0,0,0,.62) !important;
+  font: 14px/1.4 Arial, sans-serif !important;
+}
+.ddb-qol-token-maker-head,
+.ddb-qol-token-maker-footer {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 16px !important;
+}
+.ddb-qol-token-maker-head {
+  justify-content: space-between !important;
+  border-bottom: 1px solid #343a40 !important;
+}
+.ddb-qol-token-maker-head strong { display:block !important; font-size:18px !important; color:#f0d48d !important; }
+.ddb-qol-token-maker-head small { display:block !important; margin-top:2px !important; opacity:.72 !important; }
+.ddb-qol-token-maker-head button {
+  width: 34px !important; height: 34px !important; border: 1px solid #555 !important; border-radius: 5px !important;
+  background: #252a2f !important; color: #fff !important; font-size: 24px !important; line-height: 1 !important; cursor:pointer !important;
+}
+.ddb-qol-token-maker-body {
+  display: grid !important;
+  grid-template-columns: minmax(320px, 540px) minmax(230px, 1fr) !important;
+  gap: 20px !important;
+  padding: 18px !important;
+}
+.ddb-qol-token-maker-stage-wrap { min-width:0 !important; }
+.ddb-qol-token-maker-canvas {
+  display:block !important;
+  width: min(100%, 512px) !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  margin: 0 auto !important;
+  border: 1px solid #4d5359 !important;
+  border-radius: 8px !important;
+  background:#17191c !important;
+  cursor: grab !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+.ddb-qol-token-maker-canvas.ddb-qol-dragging { cursor: grabbing !important; }
+.ddb-qol-token-maker-caption { margin-top:8px !important; text-align:center !important; font-size:11px !important; opacity:.68 !important; }
+.ddb-qol-token-maker-controls { display:flex !important; flex-direction:column !important; gap:14px !important; }
+.ddb-qol-token-maker-source > span,
+.ddb-qol-token-maker-zoom > span { display:flex !important; justify-content:space-between !important; gap:8px !important; margin-bottom:7px !important; font-weight:700 !important; }
+.ddb-qol-token-maker-source > div { display:grid !important; grid-template-columns:1fr 1fr !important; gap:6px !important; }
+.ddb-qol-token-maker-source button,
+.ddb-qol-token-maker-reset,
+.ddb-qol-token-maker-footer button {
+  border:1px solid #555d65 !important; border-radius:5px !important; background:#272d33 !important; color:#eee !important;
+  padding:9px 11px !important; cursor:pointer !important; font-weight:700 !important;
+}
+.ddb-qol-token-maker-source button.ddb-qol-active { border-color:#d0a94f !important; color:#f2d487 !important; background:#352f21 !important; }
+.ddb-qol-token-maker-zoom input { width:100% !important; accent-color:#c79b3f !important; }
+.ddb-qol-token-maker-tip,
+.ddb-qol-token-maker-note { padding:11px 12px !important; border-radius:6px !important; background:#20262b !important; border:1px solid #343c43 !important; }
+.ddb-qol-token-maker-tip strong { display:block !important; margin-bottom:4px !important; color:#f0d48d !important; }
+.ddb-qol-token-maker-tip span,
+.ddb-qol-token-maker-note { font-size:12px !important; opacity:.82 !important; }
+.ddb-qol-token-maker-footer { justify-content:flex-end !important; border-top:1px solid #343a40 !important; }
+.ddb-qol-token-maker-footer .ddb-qol-token-maker-confirm { background:#8b1d24 !important; border-color:#bb343d !important; color:#fff !important; }
+.ddb-qol-token-maker-footer button:disabled { opacity:.55 !important; cursor:wait !important; }
+@media (max-width: 760px) {
+  .ddb-qol-token-maker-body { grid-template-columns:1fr !important; }
+  .ddb-qol-token-maker-controls { max-width:512px !important; margin:0 auto !important; width:100% !important; }
+}
+
+/* v0.3.24 — importer review now names the exact fields/items that need attention. */
+.ddb-qol-finisher.ddb-qol-finisher-review {
+  width: min(520px, calc(100vw - 36px));
+  max-width: 520px;
+  max-height: min(70vh, 620px);
+  overflow: auto;
+}
+.ddb-qol-finisher-title { font-weight: 800; margin-bottom: 7px; }
+.ddb-qol-review-list { margin: 0 0 10px 18px; padding: 0; }
+.ddb-qol-review-list li { margin: 4px 0; }
+.ddb-qol-finisher-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.ddb-qol-finisher-actions button,
+.ddb-qol-return-maps,
+.ddb-qol-review-close {
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 4px;
+  background: rgba(0,0,0,.22);
+  color: #fff;
+  padding: 6px 10px;
+  font-weight: 700;
+}
+
+
+/* v0.3.32 — Quick HP HUD for exactly one selected Maps token. */
+.ddb-qol-quick-hp-hud {
+  position: fixed !important;
+  z-index: 2147483000 !important;
+  box-sizing: border-box !important;
+  min-height: 54px !important;
+  display: grid !important;
+  grid-template-columns: minmax(118px, 1fr) minmax(86px, .8fr) minmax(128px, 1fr) !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 12px !important;
+  border: 1px solid #c79b3f !important;
+  border-radius: 6px 6px 2px 2px !important;
+  background: rgba(21, 26, 30, .98) !important;
+  color: #f2f2f2 !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,.48) !important;
+  font: 700 14px/1.1 Arial, sans-serif !important;
+  pointer-events: auto !important;
+}
+.ddb-qol-quick-hp-action {
+  height: 42px !important;
+  min-width: 0 !important;
+  padding: 0 12px !important;
+  border: 1px solid #d1a641 !important;
+  border-radius: 9px !important;
+  background: #20262b !important;
+  color: #f3f3f3 !important;
+  font: 800 13px/1 Arial, sans-serif !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+.ddb-qol-quick-hp-action span { font-size: 19px !important; vertical-align: -1px !important; }
+.ddb-qol-quick-hp-action:hover { background: #2a3238 !important; filter: brightness(1.08) !important; }
+.ddb-qol-quick-hp-action:disabled { opacity: .55 !important; cursor: wait !important; }
+.ddb-qol-quick-hp-input {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: 42px !important;
+  min-width: 0 !important;
+  padding: 0 8px !important;
+  border: 1px solid #d1a641 !important;
+  border-radius: 6px !important;
+  outline: none !important;
+  background: #343d42 !important;
+  color: #fff !important;
+  text-align: center !important;
+  font: 700 22px/1 Arial, sans-serif !important;
+  appearance: textfield !important;
+}
+.ddb-qol-quick-hp-input::-webkit-inner-spin-button,
+.ddb-qol-quick-hp-input::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; }
+.ddb-qol-quick-hp-input:focus { box-shadow: 0 0 0 2px rgba(209,166,65,.25) !important; }
+.ddb-qol-quick-hp-status {
+  position: absolute !important;
+  left: 12px !important;
+  right: 12px !important;
+  bottom: -20px !important;
+  text-align: center !important;
+  color: #bfe2c2 !important;
+  font: 700 11px/16px Arial, sans-serif !important;
+  text-shadow: 0 1px 3px #000 !important;
+  pointer-events: none !important;
+}
+.ddb-qol-quick-hp-status.ddb-qol-quick-hp-error { color: #ffb3b3 !important; }

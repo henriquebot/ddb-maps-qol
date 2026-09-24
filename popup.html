@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DDB Maps QoL</title>
+  <style>
+    :root{
+      color-scheme:dark;
+      --bg:#101820;
+      --panel:#16222d;
+      --line:#31404c;
+      --gold:#e1b84e;
+      --gold-soft:#f1d785;
+      --text:#f7f4ec;
+      --muted:#9eabb5;
+    }
+    *{box-sizing:border-box}
+    body{
+      font:13px/1.38 Arial,sans-serif;
+      margin:0;
+      width:330px;
+      color:var(--text);
+      background:
+        linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),
+        var(--bg);
+      background-size:28px 28px;
+    }
+    header{
+      display:flex;
+      align-items:center;
+      gap:11px;
+      padding:14px 14px 12px;
+      border-bottom:1px solid var(--line);
+      background:rgba(11,17,23,.76);
+    }
+    header img{width:42px;height:42px;border-radius:11px}
+    h1{font-size:16px;line-height:1.05;margin:0}
+    .version{display:block;color:var(--gold-soft);font-size:11px;font-weight:700;margin-top:4px}
+    main{padding:8px 14px 13px}
+    label{
+      display:flex;
+      gap:9px;
+      align-items:flex-start;
+      padding:9px 0;
+      cursor:pointer;
+      border-bottom:1px solid rgba(255,255,255,.055);
+    }
+    label:last-of-type{border-bottom:0}
+    input{margin-top:3px;accent-color:var(--gold)}
+    b{display:block;font-size:13px}
+    .sub{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+    .hint{
+      margin-top:10px;
+      padding:9px 10px;
+      border:1px solid rgba(225,184,78,.32);
+      border-radius:8px;
+      background:rgba(225,184,78,.075);
+      color:#ddd7c6;
+      font-size:11px;
+    }
+    .hint strong{color:var(--gold-soft)}
+
+    .status-card{
+      margin:10px 0 2px;
+      padding:10px;
+      border:1px solid var(--line);
+      border-radius:9px;
+      background:rgba(9,15,20,.54);
+    }
+    .status-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+    .status-title b{color:var(--gold-soft)}
+    .status-list{display:grid;gap:5px}
+    .status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:11px}
+    .status-value{font-weight:700;text-align:right;color:#d7dee3}
+    .status-value.ok{color:#8fd4a2}.status-value.warn{color:#f1d785}.status-value.off{color:#89959e}
+    .diagnostic-button{
+      width:100%;margin-top:9px;padding:8px 10px;border:1px solid rgba(225,184,78,.55);border-radius:7px;
+      background:rgba(225,184,78,.10);color:var(--gold-soft);font-weight:700;cursor:pointer
+    }
+    .diagnostic-button:hover{background:rgba(225,184,78,.17)}
+    .diagnostic-button:disabled{opacity:.55;cursor:default}
+    footer{
+      padding:10px 14px 12px;
+      border-top:1px solid var(--line);
+      color:var(--muted);
+      font-size:10.5px;
+      background:rgba(11,17,23,.7);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon-128.png" alt="">
+    <div>
+      <h1>DDB Maps QoL</h1>
+      <span class="version" id="version">carregando…</span>
+    </div>
+  </header>
+
+  <main>
+    <label><input id="hb" type="checkbox"><span><b>+HB no Maps</b><span class="sub">Importador de monstros e Token Maker.</span></span></label>
+    <label><input id="damage" type="checkbox"><span><b>Damage Applicator</b><span class="sub">Aplicação rápida de dano pelo Game Log.</span></span></label>
+    <label><input id="extended" type="checkbox"><span><b>Bestiary estendido</b><span class="sub">Inclui prerelease e homebrew/community indexado.</span></span></label>
+    <label><input id="maps" type="checkbox"><span><b>Busca de mapas</b><span class="sub">Busca e ordenação aprimoradas no Maps.</span></span></label>
+    <label><input id="stickers" type="checkbox"><span><b>Stickers próprios</b><span class="sub">PNG/JPG/WebP sincronizados pelo Maps.</span></span></label>
+
+    <div class="hint"><strong>Stickers:</strong> se o primeiro drop ainda não estiver ativo, pressione <strong>X</strong> e faça 1 Ping em qualquer ponto do mapa.</div>
+
+    <section class="status-card" aria-labelledby="status-title">
+      <div class="status-title"><b id="status-title">Status desta aba</b><span class="sub" id="page-status">verificando…</span></div>
+      <div class="status-list">
+        <div class="status-row"><span>Maps</span><span class="status-value off" id="status-maps">—</span></div>
+        <div class="status-row"><span>Game Log</span><span class="status-value off" id="status-gamelog">—</span></div>
+        <div class="status-row"><span>Stickers</span><span class="status-value off" id="status-stickers">—</span></div>
+        <div class="status-row"><span>Importer</span><span class="status-value off" id="status-importer">—</span></div>
+      </div>
+      <button type="button" class="diagnostic-button" id="copy-diagnostic">Copiar diagnóstico</button>
+    </section>
+  </main>
+
+  <footer>As alterações entram após recarregar a aba do D&D Beyond.</footer>
+  <script src="popup.js"></script>
+</body>
+</html>
