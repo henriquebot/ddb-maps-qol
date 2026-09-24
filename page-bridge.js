@@ -1236,21 +1236,78 @@
 
   function mapThumbnailUrl(obj) {
     if (!obj || typeof obj !== "object") return "";
-    const scopes = [obj, obj?.map, obj?.metadata, obj?.definition, obj?.thumbnail, obj?.image, obj?.preview].filter(Boolean);
-    const keys = [
+
+    // Root/map metadata often contains a generic "url" that points to an API
+    // route or map page rather than an image. Only accept explicitly image-named
+    // fields there; generic src/url is trusted only inside thumbnail/image/preview.
+    const explicitScopes = [obj, obj?.map, obj?.metadata, obj?.definition].filter(Boolean);
+    const explicitKeys = [
       "thumbnailUrl", "thumbnailURL", "thumbUrl", "thumbURL", "previewUrl", "previewURL",
-      "imageUrl", "imageURL", "downloadUrl", "downloadURL", "signedUrl", "signedURL", "src", "url"
+      "imageUrl", "imageURL"
     ];
-    for (const scope of scopes) {
-      for (const key of keys) {
+    for (const scope of explicitScopes) {
+      for (const key of explicitKeys) {
         const value = scope?.[key];
         if (typeof value !== "string") continue;
         const url = value.trim();
         if (/^(?:https?:|data:image\/|blob:)/i.test(url)) return url;
       }
     }
-    const keyAsUrl = [obj?.thumbnailKey, obj?.imageKey, obj?.map?.thumbnailKey, obj?.map?.imageKey].find(value => typeof value === "string" && /^https?:/i.test(value));
+
+    const imageScopes = [obj?.thumbnail, obj?.image, obj?.preview].filter(Boolean);
+    const imageKeys = [
+      "thumbnailUrl", "thumbnailURL", "thumbUrl", "thumbURL", "previewUrl", "previewURL",
+      "imageUrl", "imageURL", "downloadUrl", "downloadURL", "signedUrl", "signedURL", "src", "url"
+    ];
+    for (const scope of imageScopes) {
+      for (const key of imageKeys) {
+        const value = scope?.[key];
+        if (typeof value !== "string") continue;
+        const url = value.trim();
+        if (/^(?:https?:|data:image\/|blob:)/i.test(url)) return url;
+      }
+    }
+
+    const keyAsUrl = [obj?.thumbnailKey, obj?.imageKey, obj?.map?.thumbnailKey, obj?.map?.imageKey]
+      .find(value => typeof value === "string" && /^https?:/i.test(value));
     return keyAsUrl ? String(keyAsUrl) : "";
+  }
+
+  function mapAssetKeys(obj) {
+    if (!obj || typeof obj !== "object") return [];
+    const values = [
+      obj?.thumbnailKey, obj?.imageKey,
+      obj?.map?.thumbnailKey, obj?.map?.imageKey,
+      obj?.metadata?.thumbnailKey, obj?.metadata?.imageKey,
+      obj?.definition?.thumbnailKey, obj?.definition?.imageKey
+    ];
+    return [...new Set(values.filter(value => typeof value === "string").map(value => value.trim()).filter(Boolean))];
+  }
+
+  function performanceMapImageForKeys(keys) {
+    if (!Array.isArray(keys) || !keys.length) return "";
+    let resources = [];
+    try {
+      resources = performance.getEntriesByType("resource")
+        .map(entry => String(entry.name || ""))
+        .filter(url => /^https?:/i.test(url));
+    } catch {}
+    if (!resources.length) return "";
+
+    const decode = value => {
+      try { return decodeURIComponent(String(value || "")).replace(/\\u0026/gi, "&"); }
+      catch { return String(value || ""); }
+    };
+    for (const assetKey of keys) {
+      const normalizedKey = decode(assetKey).replace(/^\/+/, "");
+      const base = normalizedKey.split("/").pop();
+      const matched = resources.find(url => {
+        const decodedUrl = decode(url);
+        return decodedUrl.includes(normalizedKey) || (base && base.length >= 8 && decodedUrl.includes(base));
+      });
+      if (matched) return matched;
+    }
+    return "";
   }
 
   function mapObjectId(obj) {
@@ -1421,7 +1478,7 @@
   }
 
   function findBestMapArray(roots, names) {
-    const wanted = new Set(names.map(n => n.toLowerCase()));
+    const wanted = new Set(names.map(normalizeIndexName).filter(Boolean));
     const seen = new WeakSet();
     let best = null;
     let budget = 24000;
@@ -1431,7 +1488,7 @@
       if (seen.has(value)) return;
       seen.add(value);
       if (Array.isArray(value)) {
-        const matches = value.filter(v => wanted.has(valueName(v).toLowerCase()));
+        const matches = value.filter(v => wanted.has(normalizeIndexName(valueName(v))));
         if (matches.length >= Math.min(3, wanted.size) && (!best || matches.length > best.matches)) best = { array: value, matches: matches.length };
         for (const item of value.slice(0, 250)) visit(item, depth + 1);
         return;
@@ -1524,11 +1581,23 @@
         delete label.dataset.ddbQolMapThumb;
         delete label.dataset.ddbQolMapThumbKey;
         const directId = mapObjectId(directItem);
-        const directThumb = mapThumbnailUrl(directItem);
-        const directThumbKey = String(directItem?.thumbnailKey || directItem?.map?.thumbnailKey || directItem?.imageKey || directItem?.map?.imageKey || "");
-        if (directId || meta?.id) label.dataset.ddbQolMapId = directId || meta.id;
-        if (directThumb || meta?.thumbnailUrl) label.dataset.ddbQolMapThumb = directThumb || meta.thumbnailUrl;
-        if (directThumbKey || meta?.thumbnailKey || meta?.imageKey) label.dataset.ddbQolMapThumbKey = directThumbKey || meta.thumbnailKey || meta.imageKey;
+        const directAssetKeys = mapAssetKeys(directItem);
+        const directThumbKey = directAssetKeys[0] || "";
+        const directThumb = mapThumbnailUrl(directItem) || performanceMapImageForKeys(directAssetKeys);
+
+        // mapMetaIndex is name-based, so it is safe only when that name identifies
+        // one dropdown item (or when its ID agrees with the direct React item).
+        const duplicateName = bucket.length > 1;
+        const metaId = String(meta?.id || "");
+        const metaCompatible = !directId || !metaId || directId === metaId;
+        const allowNameFallback = !duplicateName && metaCompatible;
+        const fallbackThumb = allowNameFallback ? String(meta?.thumbnailUrl || "") : "";
+        const fallbackThumbKey = allowNameFallback ? String(meta?.thumbnailKey || meta?.imageKey || "") : "";
+        const fallbackId = allowNameFallback ? metaId : "";
+
+        if (directId || fallbackId) label.dataset.ddbQolMapId = directId || fallbackId;
+        if (directThumb || fallbackThumb) label.dataset.ddbQolMapThumb = directThumb || fallbackThumb;
+        if (directThumbKey || fallbackThumbKey) label.dataset.ddbQolMapThumbKey = directThumbKey || fallbackThumbKey;
       }
       dropdown.dataset.ddbQolMapDates = String(withDates);
       dropdown.dataset.ddbQolMapTotal = String(labels.length);
