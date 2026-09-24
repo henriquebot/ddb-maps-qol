@@ -29,26 +29,6 @@ function arrayBufferToBase64(buffer) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "DDB_QOL_FETCH_TEXT") {
-    const url = String(message.url || "");
-    if (!isAllowed(url, JSON_PREFIXES)) {
-      sendResponse({ ok: false, error: "URL de texto não permitida." });
-      return;
-    }
-
-    (async () => {
-      try {
-        const response = await fetch(url, { cache: "force-cache" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const text = await response.text();
-        sendResponse({ ok: true, text });
-      } catch (error) {
-        sendResponse({ ok: false, error: String(error?.message || error) });
-      }
-    })();
-    return true;
-  }
-
   if (message?.type === "DDB_QOL_FETCH_JSON") {
     const url = String(message.url || "");
     if (!isAllowed(url, JSON_PREFIXES)) {
