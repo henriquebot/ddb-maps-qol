@@ -4453,6 +4453,71 @@
     return candidates[0] || null;
   }
 
+  function syncGameLogQuickDamageButtons() {
+    const buttons = [...document.querySelectorAll(`.${EXT}-quick-log-damage-button`)];
+    if (!buttons.length) return;
+
+    // The same native single-token toolbar already drives the approved Quick HP HUD.
+    // If it is absent, selection is zero/multiple/ambiguous and the direct action
+    // must not be available.
+    const hasExactlyOneSelected = SETTINGS.damageApplicator !== false && Boolean(findNativeSingleTokenToolbar());
+    for (const button of buttons) button.hidden = !hasExactlyOneSelected;
+  }
+
+  function flashQuickLogDamageButton(button, text, state = "") {
+    if (!button?.isConnected) return;
+    const original = button.dataset.ddbQolOriginalText || "−HP";
+    button.dataset.ddbQolOriginalText = original;
+    button.textContent = text;
+    button.classList.toggle(`${EXT}-quick-log-success`, state === "success");
+    button.classList.toggle(`${EXT}-quick-log-error`, state === "error");
+    clearTimeout(Number(button.dataset.ddbQolResetTimer || 0));
+    const timer = setTimeout(() => {
+      if (!button.isConnected) return;
+      button.textContent = original;
+      button.classList.remove(`${EXT}-quick-log-success`, `${EXT}-quick-log-error`);
+      button.title = button.dataset.ddbQolBaseTitle || button.title;
+    }, 1400);
+    button.dataset.ddbQolResetTimer = String(timer);
+  }
+
+  async function applyQuickGameLogDamage(button, message) {
+    const toolbar = findNativeSingleTokenToolbar();
+    if (!toolbar) {
+      button.hidden = true;
+      return;
+    }
+
+    button.disabled = true;
+    try {
+      // Re-resolve at click time so a stale Game Log card can never apply to a
+      // token that is no longer the sole current selection.
+      const target = await resolveQuickHpHudTarget(toolbar);
+      if (!target?.tokenId || toolbar !== findNativeSingleTokenToolbar()) {
+        button.hidden = true;
+        throw new Error("Selecione exatamente 1 token.");
+      }
+
+      const profile = await buildDamageProfile(message);
+      const raw = Number(profile?.total);
+      if (!Number.isFinite(raw)) throw new Error("Dano da rolagem não identificado.");
+
+      const adjusted = await adjustedDamageForTarget(target, profile);
+      const amount = Math.max(0, Math.floor(Number(adjusted) || 0));
+      const hp = await applyNativeHpChange(target, amount, "damage");
+
+      if (quickHpHudTarget?.tokenId === target.tokenId && hp) quickHpHudTarget.hp = hp;
+      button.title = `${target.name}: ${amount} de dano aplicado`;
+      flashQuickLogDamageButton(button, amount === 0 ? "0" : `−${amount}`, "success");
+    } catch (error) {
+      button.title = String(error?.message || "Falha ao aplicar dano.");
+      flashQuickLogDamageButton(button, "!", "error");
+    } finally {
+      button.disabled = false;
+      syncGameLogQuickDamageButtons();
+    }
+  }
+
   function injectOneDamageButton(el, message, seenMessages) {
     if (!message?.id || seenMessages.has(message.id)) return;
     rememberLastDamage(message);
@@ -4462,7 +4527,6 @@
 
     const card = findDamageCardForElement(el, message);
     if (!card?.appendChild) return;
-    if (document.querySelector?.(`.${EXT}-apply-damage-button[data-ddb-qol-damage-id="${CSS.escape(String(message.id))}"]`)) return;
 
     if (getComputedStyle(card).position === "static") card.style.position = "relative";
     card.style.overflow = "visible";
@@ -4471,21 +4535,46 @@
     if (anchor && getComputedStyle(anchor).position === "static") anchor.style.position = "relative";
     if (anchor?.style) anchor.style.overflow = "visible";
 
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `${EXT}-apply-damage-button`;
-    button.dataset.ddbQolDamageId = String(message.id);
-    button.dataset.ddbQolAnchor = anchor === rollBox ? "roll-box" : "card";
-    button.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M13.4 2 5.8 13h5.1L9.8 22 18.2 10h-5.3L13.4 2Z"/></svg>`;
-    button.setAttribute("aria-label", `Aplicar ${total} de dano`);
-    button.title = `Aplicar ${total} de dano`;
-    button.style.top = "50%";
-    button.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      openDamageApplicator(message).catch(error => console.error("[DDB QoL] Damage Applicator", error));
-    });
-    anchor.appendChild(button);
+    const escapedId = CSS.escape(String(message.id));
+    let button = document.querySelector?.(`.${EXT}-apply-damage-button[data-ddb-qol-damage-id="${escapedId}"]`);
+    if (!button) {
+      button = document.createElement("button");
+      button.type = "button";
+      button.className = `${EXT}-apply-damage-button`;
+      button.dataset.ddbQolDamageId = String(message.id);
+      button.dataset.ddbQolAnchor = anchor === rollBox ? "roll-box" : "card";
+      button.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M13.4 2 5.8 13h5.1L9.8 22 18.2 10h-5.3L13.4 2Z"/></svg>`;
+      button.setAttribute("aria-label", `Abrir aplicador para ${total} de dano`);
+      button.title = `Abrir aplicador para ${total} de dano`;
+      button.style.top = "50%";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openDamageApplicator(message).catch(error => console.error("[DDB QoL] Damage Applicator", error));
+      });
+      anchor.appendChild(button);
+    }
+
+    let quick = document.querySelector?.(`.${EXT}-quick-log-damage-button[data-ddb-qol-damage-id="${escapedId}"]`);
+    if (!quick) {
+      quick = document.createElement("button");
+      quick.type = "button";
+      quick.className = `${EXT}-quick-log-damage-button`;
+      quick.dataset.ddbQolDamageId = String(message.id);
+      quick.dataset.ddbQolOriginalText = "−HP";
+      quick.dataset.ddbQolBaseTitle = `Aplicar ${total} diretamente ao único token selecionado (com R/I/V)`;
+      quick.textContent = "−HP";
+      quick.title = quick.dataset.ddbQolBaseTitle;
+      quick.setAttribute("aria-label", quick.title);
+      quick.style.top = "50%";
+      quick.hidden = !findNativeSingleTokenToolbar();
+      quick.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        applyQuickGameLogDamage(quick, message).catch(error => console.error("[DDB QoL] Quick Game Log Damage", error));
+      });
+      anchor.appendChild(quick);
+    }
   }
 
   function injectDamageButtons() {
@@ -5453,6 +5542,7 @@
       wireHpPrefillTargets();
       installHpPrefillCapture();
       syncQuickHpHud();
+      syncGameLogQuickDamageButtons();
       injectMapSearch();
       injectCustomStickerUi();
       styleHomebrewStatblockHeadings();
@@ -5472,6 +5562,7 @@
     wireHpPrefillTargets();
     installHpPrefillCapture();
     syncQuickHpHud();
+    syncGameLogQuickDamageButtons();
     injectMapSearch();
     injectCustomStickerUi();
     styleHomebrewStatblockHeadings();
