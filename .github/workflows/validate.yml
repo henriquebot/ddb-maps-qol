@@ -1,0 +1,34 @@
+name: Validate extension
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check content.js
+          node --check page-bridge.js
+          node --check five-tools.js
+          node --check popup.js
+          node --check service-worker.js
+
+      - name: Validate manifest JSON
+        run: python -m json.tool manifest.json > /dev/null
+
+      - name: Ensure manifest is MV3
+        run: |
+          node -e 'const m=require("./manifest.json"); if(m.manifest_version!==3) process.exit(1); console.log("Manifest V3 OK:", m.version)'
+
+      - name: Reject obvious remote-code execution patterns
+        run: |
+          if grep -R -nE 'eval\(|new Function\(|<script[^>]+src=["'\'' ]*https?://' --include='*.js' --include='*.html' .; then
+            echo "Potential remote-code execution pattern found."
+            exit 1
+          fi
