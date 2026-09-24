@@ -1,5 +1,15 @@
 # DDB Maps QoL — v0.3.32
 
+## Unreleased — teste via GitHub
+
+Ainda sem bump de versão/release.
+
+- Miniaturas de mapas: associação mais segura por ID/chave nativa, cache V3 e bloqueio de heurísticas que podiam usar imagem de outro item.
+- Game Log: novo botão **−HP** ao lado do aplicador completo; aparece somente com exatamente 1 token selecionado e aplica o dano da própria rolagem com R/I/V individual e Temp HP primeiro.
+- Chrome Web Store: política de privacidade, rascunho da listagem, checklist, empacotador PowerShell e validação automática no GitHub.
+- Store compliance: removida a leitura do `parser.js` remoto; os dados externos usados pelo importador continuam sendo tratados como dados, não código executável.
+
+
 Pré-lançamento / release candidate.
 
 ## Ajustes desta versão
