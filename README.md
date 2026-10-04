@@ -42,6 +42,10 @@ Esta versão mantém o importer 5etools completo. A política/estratégia de dis
 - HEAL/DAMAGE usam TOKEN_SET_HP_INFO, Temp HP primeiro e HP máximo na cura.
 - Token Maker agora permite zoom-out até 25% e “Centralizar e ajustar” enquadra a arte inteira.
 
+## Roadmap Free
+
+- [Token Skin — trocar a imagem de um token apenas naquele mapa](docs/TOKEN_SKIN.md): override visual por instância do token, sem Homebrew, com restauração da arte original. Sincronização multiplayer será investigada separadamente.
+
 ## Roadmap Premium
 
 - [Monster Scaler — arquitetura e roadmap](docs/MONSTER_SCALER_PREMIUM.md): extensão única com recursos Free locais e geração Premium autenticada no backend. Recurso planejado; ainda não implementado.
