@@ -1,4 +1,4 @@
-# DDB Maps QoL — v0.3.32
+# DDB Maps QoL — v0.3.33
 
 ## Unreleased — teste via GitHub
 
