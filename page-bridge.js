@@ -529,6 +529,68 @@
   let lastPointerSample = null;
   const mapCalibrationAnchors = [];
 
+  // Lightweight diagnostics for intermittent Maps disconnects/performance stalls.
+  // No message payloads, campaign IDs, token IDs, or player data are recorded.
+  const ddbDiag = {
+    startedAt: Date.now(),
+    socketsObserved: 0,
+    opens: 0,
+    closes: 0,
+    errors: 0,
+    incoming: 0,
+    outgoing: 0,
+    incomingWorkMs: 0,
+    outgoingWorkMs: 0,
+    incomingMaxMs: 0,
+    outgoingMaxMs: 0,
+    lastMessageAt: 0,
+    lastClose: null
+  };
+
+  function ddbDiagLog(event, extra = {}) {
+    try {
+      console.info("[DDB QoL DIAG]", event, {
+        at: new Date().toISOString(),
+        ...extra
+      });
+    } catch {}
+  }
+
+  function ddbDiagWork(direction, startedAt) {
+    const elapsed = Math.max(0, performance.now() - startedAt);
+    if (direction === "incoming") {
+      ddbDiag.incoming++;
+      ddbDiag.incomingWorkMs += elapsed;
+      ddbDiag.incomingMaxMs = Math.max(ddbDiag.incomingMaxMs, elapsed);
+    } else {
+      ddbDiag.outgoing++;
+      ddbDiag.outgoingWorkMs += elapsed;
+      ddbDiag.outgoingMaxMs = Math.max(ddbDiag.outgoingMaxMs, elapsed);
+    }
+    ddbDiag.lastMessageAt = Date.now();
+  }
+
+  if (/^\/games\/\d+/i.test(location.pathname)) {
+    setInterval(() => {
+      ddbDiagLog("summary", {
+        uptimeSec: Math.round((Date.now() - ddbDiag.startedAt) / 1000),
+        socketReady: Boolean(ddbMapSocket?.readyState === WebSocket.OPEN && ddbMapClientId),
+        socketsObserved: ddbDiag.socketsObserved,
+        opens: ddbDiag.opens,
+        closes: ddbDiag.closes,
+        errors: ddbDiag.errors,
+        incoming: ddbDiag.incoming,
+        outgoing: ddbDiag.outgoing,
+        incomingWorkMs: Math.round(ddbDiag.incomingWorkMs),
+        outgoingWorkMs: Math.round(ddbDiag.outgoingWorkMs),
+        incomingMaxMs: Math.round(ddbDiag.incomingMaxMs * 10) / 10,
+        outgoingMaxMs: Math.round(ddbDiag.outgoingMaxMs * 10) / 10,
+        lastMessageAgoMs: ddbDiag.lastMessageAt ? Date.now() - ddbDiag.lastMessageAt : null,
+        lastClose: ddbDiag.lastClose
+      });
+    }, 10000);
+  }
+
   function sendNativeMapAction(type, payload, state = "FULFILLED") {
     if (!ddbMapSocket || ddbMapSocket.readyState !== WebSocket.OPEN || !ddbMapClientId) return false;
     const msg = {
@@ -1067,36 +1129,66 @@
   function observeMapSocket(socket) {
     if (!socket || observedSockets.has(socket)) return;
     observedSockets.add(socket);
+    ddbDiag.socketsObserved++;
+    ddbDiagLog("socket-observed", {
+      urlHost: (() => { try { return new URL(socket.url).hostname; } catch { return ""; } })()
+    });
     socket.addEventListener("open", () => {
+      ddbDiag.opens++;
+      ddbDiagLog("socket-open", { readyState: socket.readyState });
       if (socket === ddbMapSocket) {
         ddbSocketReadyPosted = false;
         setTimeout(() => postBridge("MAP_SOCKET_READY"), 80);
       }
     });
+    socket.addEventListener("close", event => {
+      ddbDiag.closes++;
+      ddbDiag.lastClose = {
+        at: new Date().toISOString(),
+        code: Number(event.code || 0),
+        reason: String(event.reason || "").slice(0, 160),
+        wasClean: Boolean(event.wasClean)
+      };
+      ddbDiagLog("socket-close", ddbDiag.lastClose);
+    });
+    socket.addEventListener("error", () => {
+      ddbDiag.errors++;
+      ddbDiagLog("socket-error", { readyState: socket.readyState });
+    });
     socket.addEventListener("message", event => {
-      const msg = parseWsMessage(event.data);
-      if (msg) {
-        observeSceneLifecycleMessage(msg);
-        harvestEntities(msg, "ws-incoming", 10, 12000);
-        harvestSceneTokenCandidates(msg, `ws-incoming:${String(msg?.type || "")}`, 10, 12000);
-        harvestNativeStickerStates(msg, "incoming", 8, 7000);
-        harvestKnownCustomStickerStates(msg, "incoming", 8, 7000);
-      }
-      const type = String(msg?.type || "");
-      if (!type || /^(PONG|PING)$/i.test(type)) return;
-      if (/JOIN|CONNECT|RECONNECT|PRESENCE|SESSION|SUBSCRIB|SYNC|SNAPSHOT|STATE|ROOM|MEMBER|USER|PLAYER|PARTICIPANT|CLIENT/i.test(type)) {
-        const now = Date.now();
-        if (now - ddbLastPeerSignal > 3500) {
-          ddbLastPeerSignal = now;
-          postBridge("MAP_PEER_RECONNECT", { eventType: type });
+      const workStartedAt = performance.now();
+      try {
+        const msg = parseWsMessage(event.data);
+        if (msg) {
+          observeSceneLifecycleMessage(msg);
+          harvestEntities(msg, "ws-incoming", 10, 12000);
+          harvestSceneTokenCandidates(msg, `ws-incoming:${String(msg?.type || "")}`, 10, 12000);
+          harvestNativeStickerStates(msg, "incoming", 8, 7000);
+          harvestKnownCustomStickerStates(msg, "incoming", 8, 7000);
         }
+        const type = String(msg?.type || "");
+        if (!type || /^(PONG|PING)$/i.test(type)) return;
+        if (/JOIN|CONNECT|RECONNECT|PRESENCE|SESSION|SUBSCRIB|SYNC|SNAPSHOT|STATE|ROOM|MEMBER|USER|PLAYER|PARTICIPANT|CLIENT/i.test(type)) {
+          const now = Date.now();
+          if (now - ddbLastPeerSignal > 3500) {
+            ddbLastPeerSignal = now;
+            postBridge("MAP_PEER_RECONNECT", { eventType: type });
+          }
+        }
+      } catch (error) {
+        ddbDiag.errors++;
+        ddbDiagLog("incoming-handler-error", { message: String(error?.message || error).slice(0, 300) });
+      } finally {
+        ddbDiagWork("incoming", workStartedAt);
       }
     });
   }
 
   WebSocket.prototype.send = function(data) {
+    const isDdbMapSocket = String(this.url || "").includes("games.dndbeyond.com");
+    const workStartedAt = isDdbMapSocket ? performance.now() : 0;
     try {
-      if (String(this.url || "").includes("games.dndbeyond.com")) {
+      if (isDdbMapSocket) {
         if (ddbMapSocket !== this) ddbSocketReadyPosted = false;
         ddbMapSocket = this;
         observeMapSocket(this);
@@ -1126,9 +1218,15 @@
           }, 50);
         }
       }
-    } catch {}
-    const result = originalWsSend.apply(this, arguments);
-    return result;
+    } catch (error) {
+      if (isDdbMapSocket) {
+        ddbDiag.errors++;
+        ddbDiagLog("outgoing-handler-error", { message: String(error?.message || error).slice(0, 300) });
+      }
+    } finally {
+      if (isDdbMapSocket) ddbDiagWork("outgoing", workStartedAt);
+    }
+    return originalWsSend.apply(this, arguments);
   };
 
   function postBridge(type, extra = {}) {
