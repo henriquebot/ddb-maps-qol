@@ -18,6 +18,7 @@ $RuntimeFiles = @(
   "manifest.json",
   "content.js",
   "page-bridge.js",
+  "five-tools-page-bridge.js",
   "five-tools.js",
   "service-worker.js",
   "popup.html",
