@@ -41,3 +41,7 @@ Esta versão mantém o importer 5etools completo. A política/estratégia de dis
 - O valor sugere automaticamente o último dano rolado, já considerando R/I/V quando o alvo pode ser identificado.
 - HEAL/DAMAGE usam TOKEN_SET_HP_INFO, Temp HP primeiro e HP máximo na cura.
 - Token Maker agora permite zoom-out até 25% e “Centralizar e ajustar” enquadra a arte inteira.
+
+## Roadmap Premium
+
+- [Monster Scaler — arquitetura e roadmap](docs/MONSTER_SCALER_PREMIUM.md): extensão única com recursos Free locais e geração Premium autenticada no backend. Recurso planejado; ainda não implementado.
