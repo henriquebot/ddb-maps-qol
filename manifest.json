@@ -53,6 +53,18 @@
         "https://5etools-mirror-3.github.io/bestiary.html*"
       ],
       "js": [
+        "five-tools-page-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://5e.tools/bestiary.html*",
+        "https://5etools.com/bestiary.html*",
+        "https://5etools-mirror-3.github.io/bestiary.html*"
+      ],
+      "js": [
         "five-tools.js"
       ],
       "run_at": "document_idle"
