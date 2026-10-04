@@ -1,4 +1,4 @@
-# DDB Maps QoL — v0.3.33
+# DDB Maps QoL — v0.3.34
 
 ## Unreleased — teste via GitHub
 
@@ -8,7 +8,7 @@ Ainda sem bump de versão/release.
 - Game Log: novo botão **−HP** ao lado do aplicador completo; aparece somente com exatamente 1 token selecionado e aplica o dano da própria rolagem com R/I/V individual e Temp HP primeiro.
 - Chrome Web Store: política de privacidade, rascunho da listagem, checklist, empacotador PowerShell e validação automática no GitHub.
 - Store compliance: removida a leitura do `parser.js` remoto; os dados externos usados pelo importador continuam sendo tratados como dados, não código executável.
-- 5etools → Homebrew: o botão `DDB HB ↗` agora preserva a criatura atualmente renderizada pelo 5etools, inclusive alterações feitas pelo Scale CR, em vez de reimportar a ficha original.
+- 5etools → Homebrew: o botão `DDB HB ↗` agora preserva a criatura atualmente renderizada pelo 5etools, inclusive alterações feitas pelo Scale CR, em vez de reimportar a ficha original.\n- Diagnóstico de estabilidade: registra abertura/fechamento/erro do socket do Maps e mede o custo do interceptador WebSocket sem guardar payloads, IDs de campanha, tokens ou dados de jogadores.
 
 
 Pré-lançamento / release candidate.
