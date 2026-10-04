@@ -2122,7 +2122,13 @@
           try {
             statusEl.textContent = `Carregando ${hit.name} (${hit.source})...`;
             const resolvedResult = await resolveCatalogHit(hit);
-            const resolved = resolvedResult.monster;
+            const renderedMonster = importContext?.from === "5etools" && importContext?.renderedMonster
+              ? importContext.renderedMonster
+              : null;
+            const renderedMatches = renderedMonster
+              && normalize(renderedMonster.name) === normalize(hit.name)
+              && normalize(renderedMonster.source || hit.source) === normalize(hit.source);
+            const resolved = renderedMatches ? deepCopy(renderedMonster) : resolvedResult.monster;
             const edition = editionTouched ? editionEl.value : inferEdition(resolved, hit);
             editionEl.value = edition;
             statusEl.textContent = `Buscando lore e Lair Actions de ${resolved.name}...`;
@@ -2132,6 +2138,9 @@
             ]);
             const { form: mainForm, warnings } = fillMainMonsterForm(resolved, edition, { loreHtml, lairHtml, sourceFull: hit.sourceFull || hit.source });
             warnings.push(...resolvedResult.warnings);
+            if (renderedMatches && importContext?.scaledCr != null) {
+              warnings.push(`Importado a partir da versão escalada no 5etools para CR ${importContext.scaledCr}.`);
+            }
 
             statusEl.textContent = `Validando rollables nativos do D&D Beyond...`;
             disableNativeRollableGeneration();
