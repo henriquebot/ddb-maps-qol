@@ -28,6 +28,34 @@ Criar uma variante; preservar o monstro original. Adicionar ao Homebrew não sig
 
 Sem login ou Premium: mostrar apresentação e acesso ao desbloqueio. Sem ficha completa acessível: explicar quais dados faltam e impedir uma geração baseada apenas no nome/HP do token.
 
+## Modos de uso
+
+### Automático
+
+Fluxo rápido para quem só quer outro CR:
+- escolher CR alvo;
+- o motor recalcula automaticamente os campos suportados;
+- mostrar prévia antes/depois;
+- permitir enviar a variante ao Homebrew.
+
+Quando a origem vier do 5etools e já estiver escalada, o importador Free deve preservar a versão renderizada pelo próprio 5etools em vez de voltar à ficha original. Isso é um atalho de importação, não substitui o motor Premium.
+
+### Avançado
+
+Usar o CR alvo como ponto de partida, mas permitir controle fino:
+- preservar ou alterar CA;
+- HP baixo/médio/alto ou valor ajustado;
+- preservar ou alterar bônus de ataque;
+- controlar dano separadamente;
+- preservar ou recalcular CDs;
+- preservar ou alterar atributos;
+- preservar ou recalcular iniciativa;
+- controlar Multiattack quando o padrão for reconhecido;
+- renomear a variante;
+- escolher individualmente quais grupos serão recalculados.
+
+O modo Avançado é o diferencial do Monster Scaler: não deve ficar preso a um pacote rígido de alterações determinado apenas pelo CR.
+
 ## Opções previstas
 
 | Opção | Comportamento previsto |
@@ -95,6 +123,7 @@ A identidade do requestId deve ser vinculada à conta e ao conteúdo da solicita
 
 Inspeção do repositório na versão 0.3.32:
 - content.js contém getDdbMonster(id), leitura da API de monstros e funções de HP/dano.
+- O bridge do 5etools pode capturar a criatura atualmente renderizada, incluindo uma versão alterada pelo Scale CR, para que o importador Free preserve essa variante ao enviar ao Homebrew.
 - A seleção precisa resolver ID e ficha do monstro com segurança; a disponibilidade de todos os campos ainda deve ser testada.
 - fillMainMonsterForm(...) e resumePendingImport() fazem parte do importador existente.
 - O importador utiliza ddbQolPendingMonsterImportV2 para continuar a criação na página de edição.
