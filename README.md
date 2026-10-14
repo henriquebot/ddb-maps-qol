@@ -1,4 +1,10 @@
-# DDB Maps QoL — v0.3.34
+# DDB Maps QoL — v0.3.35
+
+## v0.3.35 — correção de estabilidade do Monster Browser
+
+- Corrigido risco de erro `NotFoundError: removeChild` ao pesquisar monstros em sequência.
+- O botão nativo `+` permanece na árvore React do D&D Beyond; o alinhamento com os atalhos `+HB`/`5e` é apenas visual.
+- Teste de regressão: pesquisar, apagar e trocar várias vezes os termos no Monster Browser, inclusive navegar pelas páginas de resultados.
 
 ## Unreleased — teste via GitHub
 

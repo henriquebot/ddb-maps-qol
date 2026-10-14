@@ -1099,3 +1099,9 @@ html.ddb-qol-sticker-drag-active * {
   pointer-events: none !important;
 }
 .ddb-qol-quick-hp-status.ddb-qol-quick-hp-error { color: #ffb3b3 !important; }
+
+/* v0.3.35 — keep the native React-owned monster action in its original DOM parent.
+   Shift only its presentation; the custom 5e rail is aligned via measurements. */
+.ddb-qol-monster-row-host .ddb-qol-native-monster-action {
+  translate: 0 -13px !important;
+}
