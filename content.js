@@ -1842,6 +1842,14 @@
     const five = host.querySelector(`.${EXT}-5e-button`) || row.querySelector?.(`.${EXT}-5e-button`);
     if (!hb && !five) return;
 
+    // Apply row layout before measuring the native button's visual position.
+    host.classList.add(`${EXT}-monster-row-host`);
+    host.style.setProperty("box-sizing", "border-box", "important");
+    host.style.removeProperty("width");
+    host.style.setProperty("max-width", "100%", "important");
+    host.style.setProperty("min-width", "0", "important");
+    host.style.setProperty("padding-right", "50px", "important");
+
     const native = nativeMonsterActionButton(row);
     const stack = monsterActionStack(host);
     if (!stack) return;
@@ -1882,12 +1890,6 @@
       stack.style.removeProperty("top");
     }
 
-    host.classList.add(`${EXT}-monster-row-host`);
-    host.style.setProperty("box-sizing", "border-box", "important");
-    host.style.removeProperty("width");
-    host.style.setProperty("max-width", "100%", "important");
-    host.style.setProperty("min-width", "0", "important");
-    host.style.setProperty("padding-right", "50px", "important");
   }
 
 
