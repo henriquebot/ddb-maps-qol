@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  console.info("[DDB QoL] content v0.3.32 carregado em", location.href);
+  console.info("[DDB QoL] content v0.3.35 carregado em", location.href);
 
   const EXT = "ddb-qol";
   const SRC_ROOT = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/";
@@ -1846,13 +1846,12 @@
     const stack = monsterActionStack(host);
     if (!stack) return;
 
-    // Move the real native + button into the same rail as our buttons instead
-    // of trying to visually chase its changing React geometry.
+    // React owns the DDB native '+' button. Never reparent it: moving a
+    // React-managed node causes removeChild/NotFoundError during searches.
     const useNative = native && native !== hb && native !== five && !rowLooksUnavailable(row);
-    if (useNative) {
-      native.classList.add(`${EXT}-native-monster-action`, `${EXT}-row-action-aligned`);
-      if (native.parentElement !== stack) stack.appendChild(native);
-    }
+    if (useNative) native.classList.add(`${EXT}-native-monster-action`);
+
+    // Only extension-owned buttons may enter (or be reordered inside) the rail.
     if (hb) {
       hb.classList.add(`${EXT}-row-action-aligned`);
       if (hb.parentElement !== stack) stack.appendChild(hb);
@@ -1862,11 +1861,26 @@
       five.classList.toggle(`${EXT}-5e-with-hb`, Boolean(hb));
       if (five.parentElement !== stack) stack.appendChild(five);
     }
+    if (hb && stack.firstElementChild !== hb) stack.insertBefore(hb, stack.firstElementChild);
+    if (five && stack.lastElementChild !== five) stack.appendChild(five);
 
-    // Keep the ordering deterministic: native/+HB first, 5e second.
-    const topAction = hb || (useNative ? native : null);
-    if (topAction && stack.firstElementChild !== topAction) stack.insertBefore(topAction, stack.firstElementChild);
-    if (five && topAction && topAction.nextElementSibling !== five) stack.insertBefore(five, topAction.nextElementSibling);
+    // Visually align the custom rail with the native '+' without changing
+    // its parent or its React-owned DOM structure.
+    if (useNative) {
+      const hostRect = host.getBoundingClientRect();
+      const nativeRect = native.getBoundingClientRect();
+      if (hostRect.width > 36 && nativeRect.width > 0) {
+        const desiredRight = hostRect.right - (nativeRect.left + nativeRect.width / 2) - 18;
+        const right = Math.max(0, Math.min(hostRect.width - 36, desiredRight));
+        const desiredTop = nativeRect.top - hostRect.top + nativeRect.height / 2 + 26;
+        const top = Math.max(11, Math.min(hostRect.height - 11, desiredTop));
+        stack.style.setProperty("right", `${Math.round(right)}px`, "important");
+        stack.style.setProperty("top", `${Math.round(top)}px`, "important");
+      }
+    } else {
+      stack.style.removeProperty("right");
+      stack.style.removeProperty("top");
+    }
 
     host.classList.add(`${EXT}-monster-row-host`);
     host.style.setProperty("box-sizing", "border-box", "important");
