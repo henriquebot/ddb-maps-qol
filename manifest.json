@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DDB Maps QoL",
-  "version": "0.3.36",
+  "version": "0.3.37",
   "description": "Ferramentas de qualidade de vida para D&D Beyond Maps: importador 5etools, Token Maker, Damage Applicator e busca de mapas.",
   "permissions": [
     "storage",
