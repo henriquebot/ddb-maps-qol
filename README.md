@@ -1,8 +1,12 @@
-# DDB Maps QoL — v0.3.34
+# DDB Maps QoL — v0.3.36
 
-## Unreleased — teste via GitHub
+## v0.3.36 — simplificação do Maps
 
-Ainda sem bump de versão/release.
+- Removido o sistema de stickers personalizados da extensão: painel, upload, biblioteca, sincronização, reconstrução e monitoramento WebSocket específicos, agora supridos pelo recurso nativo do D&D Beyond.
+- Preservados os dados locais antigos de stickers para permitir restauração em versões anteriores, se necessário; a extensão não os utiliza mais.
+- Mantidos Damage Applicator, Quick HP, importador, Token Maker e busca de mapas.
+
+## Alterações anteriores
 
 - Miniaturas de mapas: associação mais segura por ID/chave nativa, cache V3 e bloqueio de heurísticas que podiam usar imagem de outro item.
 - Game Log: novo botão **−HP** ao lado do aplicador completo; aparece somente com exatamente 1 token selecionado e aplica o dano da própria rolagem com R/I/V individual e Temp HP primeiro.
@@ -21,12 +25,8 @@ Pré-lançamento / release candidate.
 - Reduz o escopo dos content scripts: bridge apenas no Maps; importer apenas nas páginas necessárias do Homebrew; integração 5etools apenas no Bestiary suportado.
 - Reduz host permissions redundantes e restringe o proxy de imagens aos repositórios conhecidos do importer.
 - Endurece a ponte `window.postMessage` usando a origem atual e validação de `event.origin`.
-- Popup agora mostra status da aba atual: Maps, Game Log, stickers e importer.
+- Popup mostra status da aba atual: Maps, Game Log e importer.
 - Novo botão **Copiar diagnóstico**, sem expor ID da campanha/monstro na URL copiada.
-
-## Limitação conhecida
-
-O primeiro drop de stickers pode exigir uma calibração nativa após carregar o Maps: pressione **X** e faça **1 Ping** em qualquer ponto do mapa.
 
 ## Importer / Needs Review
 

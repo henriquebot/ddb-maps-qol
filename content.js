@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  console.info("[DDB QoL] content v0.3.32 carregado em", location.href);
+  console.info("[DDB QoL] content v0.3.36 carregado em", location.href);
 
   const EXT = "ddb-qol";
   const SRC_ROOT = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/";
@@ -16,7 +16,7 @@
   const CREATURE_CATEGORY_ID = 1;
   const FIVE_TOOLS_BESTIARY_URL = "https://5e.tools/bestiary.html";
   const SETTINGS_KEY = "ddbQolSettingsV3";
-  const DEFAULT_SETTINGS = { hbButtons: true, damageApplicator: true, extendedBestiary: true, mapSearch: true, customStickers: true };
+  const DEFAULT_SETTINGS = { hbButtons: true, damageApplicator: true, extendedBestiary: true, mapSearch: true };
   let SETTINGS = { ...DEFAULT_SETTINGS };
 
   const SIZE_MAP = {
@@ -4127,7 +4127,7 @@
     if (!el) return false;
     const tokenBrowser = typeof findTokenBrowserPanel === "function" ? findTokenBrowserPanel() : null;
     if (tokenBrowser?.contains?.(el)) return true;
-    return Boolean(el.closest?.(`#${EXT}-damage-modal,#${EXT}-sticker-panel,[role="dialog"],aside,[class*="browser" i],[class*="gameLog" i],[class*="initiative" i],[class*="toolbar" i]`));
+    return Boolean(el.closest?.(`#${EXT}-damage-modal,[role="dialog"],aside,[class*="browser" i],[class*="gameLog" i],[class*="initiative" i],[class*="toolbar" i]`));
   }
 
   const sceneTokenRequests = new Map();
@@ -4616,34 +4616,13 @@
 
 
   // ---------------------------------------------------------------------------
-  // Maps QoL — busca/ordenação de mapas + stickers personalizados
+  // Maps QoL — busca/ordenação de mapas
   // ---------------------------------------------------------------------------
-  const CUSTOM_STICKERS_KEY = "ddbQolCustomStickersV1";
-  const CUSTOM_STICKER_INSTANCES_KEY = "ddbQolCustomStickerInstancesV1";
-  const CUSTOM_STICKER_TOMBSTONES_KEY = "ddbQolCustomStickerTombstonesV1";
   const MAP_THUMB_CACHE_KEY = "ddbQolMapThumbCacheV3";
   const OLD_MAP_THUMB_CACHE_KEYS = ["ddbQolMapThumbCacheV2", "ddbQolMapThumbCacheV1"];
   let mapThumbCache = null;
   let mapSearchValue = "";
   let mapSortDirection = "desc";
-  let customStickerUiReady = false;
-  let customStickerStatusTimer = null;
-  const stickerDeletedIds = new Set();
-
-  function currentStickerScope() {
-    return {
-      gameId: currentGameId(),
-      mapName: currentMapScopeName()
-    };
-  }
-
-  function sameStickerScope(item, scope = currentStickerScope()) {
-    if (!item) return false;
-    if (item.gameId && String(item.gameId) !== String(scope.gameId)) return false;
-    if (item.mapName && scope.mapName && normalize(item.mapName) !== normalize(scope.mapName)) return false;
-    return Boolean(item.gameId || item.mapName);
-  }
-
   function isMapsPage() {
     return /^\/games\/\d+/i.test(location.pathname);
   }
@@ -4887,355 +4866,6 @@
     for (const dropdown of findVisibleMapDropdowns()) installMapSearch(dropdown).catch(() => {});
   }
 
-  function stickerToast(text, isError = false) {
-    let toast = document.getElementById(`${EXT}-sticker-toast`);
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = `${EXT}-sticker-toast`;
-      toast.className = `${EXT}-sticker-toast`;
-      document.body.appendChild(toast);
-    }
-    toast.textContent = text;
-    toast.classList.toggle(`${EXT}-sticker-toast-error`, isError);
-    toast.hidden = false;
-    clearTimeout(customStickerStatusTimer);
-    customStickerStatusTimer = setTimeout(() => { toast.hidden = true; }, 3200);
-  }
-
-  async function canvasDataUrl(bitmap, maxSide, quality) {
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width; canvas.height = height;
-    const ctx = canvas.getContext("2d", { alpha: true });
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    return { imageUrl: canvas.toDataURL("image/webp", quality), width, height };
-  }
-
-  async function prepareStickerImage(file) {
-    const type = String(file?.type || "").toLowerCase();
-    if (!/^image\/(png|jpeg|webp)$/i.test(type)) throw new Error("Use PNG, JPG ou WebP.");
-
-    const base = {
-      id: crypto.randomUUID(),
-      name: file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Sticker",
-      createdAt: Date.now()
-    };
-
-    const bitmap = await createImageBitmap(file);
-    try {
-      let out = await canvasDataUrl(bitmap, 768, 0.84);
-      if (out.imageUrl.length > 520000) out = await canvasDataUrl(bitmap, 512, 0.76);
-      if (out.imageUrl.length > 520000) out = await canvasDataUrl(bitmap, 384, 0.66);
-      if (out.imageUrl.length > 700000) throw new Error("Imagem ainda ficou grande demais após compressão.");
-      return {
-        ...base,
-        imageUrl: out.imageUrl,
-        aspectRatio: out.width / out.height
-      };
-    } finally { bitmap.close?.(); }
-  }
-
-  async function loadStickerLibrary() {
-    const raw = await getStorage(CUSTOM_STICKERS_KEY).catch(() => []);
-    if (!Array.isArray(raw)) return [];
-    const list = raw.filter(item => {
-      if (!item || typeof item !== "object" || !item.id || !item.imageUrl) return false;
-      const url = String(item.imageUrl);
-      return !/^data:/i.test(url) || /^data:image\/(?:png|jpeg|webp)/i.test(url);
-    });
-    if (list.length !== raw.length) await setStorage(CUSTOM_STICKERS_KEY, list).catch(() => {});
-    return list;
-  }
-
-  async function saveStickerLibrary(list) {
-    let trimmed = [...list].sort((a,b) => Number(b.createdAt||0) - Number(a.createdAt||0)).slice(0, 10);
-    while (trimmed.length > 1 && JSON.stringify(trimmed).length > 4500000) trimmed.pop();
-    await setStorage(CUSTOM_STICKERS_KEY, trimmed);
-    return trimmed;
-  }
-
-  async function loadStickerInstances() {
-    const list = await getStorage(CUSTOM_STICKER_INSTANCES_KEY).catch(() => []);
-    return Array.isArray(list) ? list : [];
-  }
-
-  async function saveStickerInstances(list) {
-    const trimmed = [...list]
-      .filter(item => item?.id && (item?.libraryId || item?.imageUrl))
-      .sort((a,b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0))
-      .slice(0, 60);
-    await setStorage(CUSTOM_STICKER_INSTANCES_KEY, trimmed);
-    return trimmed;
-  }
-
-  async function loadStickerTombstones() {
-    const list = await getStorage(CUSTOM_STICKER_TOMBSTONES_KEY).catch(() => []);
-    return Array.isArray(list) ? list : [];
-  }
-
-  async function saveStickerTombstones(list) {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const trimmed = [...list]
-      .filter(item => item?.id && Number(item.deletedAt || 0) >= cutoff)
-      .sort((a,b) => Number(b.deletedAt || 0) - Number(a.deletedAt || 0))
-      .slice(0, 120);
-    await setStorage(CUSTOM_STICKER_TOMBSTONES_KEY, trimmed);
-    return trimmed;
-  }
-
-  async function syncCustomStickerIdsToBridge() {
-    try {
-      const [instances, tombstones] = await Promise.all([loadStickerInstances(), loadStickerTombstones()]);
-      const deleted = new Set(tombstones.map(item => String(item.id)));
-      const scope = currentStickerScope();
-      const ids = instances
-        .filter(item => sameStickerScope(item, scope))
-        .map(item => String(item.id))
-        .filter(id => id && !deleted.has(id) && !stickerDeletedIds.has(id));
-      window.postMessage({ source: "ddb-qol-content", type: "SYNC_CUSTOM_STICKER_IDS", ids }, location.origin);
-    } catch {}
-  }
-
-  async function clearStickerTombstone(id) {
-    if (!id) return;
-    const list = await loadStickerTombstones();
-    if (!list.some(item => item.id === id)) return;
-    await saveStickerTombstones(list.filter(item => item.id !== id));
-  }
-
-  async function markStickerDeleted(id) {
-    if (!id) return;
-    const list = await loadStickerTombstones();
-    await saveStickerTombstones([{ id: String(id), deletedAt: Date.now() }, ...list.filter(item => item.id !== String(id))]);
-  }
-
-  async function rememberStickerInstance(sticker) {
-    if (!sticker?.id || (!sticker?.libraryId && !sticker?.imageUrl)) return;
-    stickerDeletedIds.delete(String(sticker.id));
-    await clearStickerTombstone(String(sticker.id));
-    const current = await loadStickerInstances();
-    const existing = current.find(item => item.id === String(sticker.id)) || {};
-    const scope = currentStickerScope();
-    const compact = {
-      ...existing,
-      id: String(sticker.id),
-      libraryId: String(sticker.libraryId || existing.libraryId || ""),
-      gameId: String(sticker.gameId || existing.gameId || scope.gameId || ""),
-      mapName: String(sticker.mapName || existing.mapName || scope.mapName || ""),
-      name: sticker.name || existing.name || "Sticker",
-      type: sticker.type || existing.type || "rectangle",
-      imageKey: sticker.imageKey || existing.imageKey || "official/stickers/br-2024/map_and_utility-arrow_down.png",
-      thumbnailKey: sticker.thumbnailKey || existing.thumbnailKey || "thumbnails/official/stickers/br-2024/map_and_utility-arrow_down.png",
-      aspectRatio: Number(sticker.aspectRatio ?? existing.aspectRatio) || 1,
-      size: Number(sticker.size ?? existing.size) || 1.5,
-      rotation: Number(sticker.rotation ?? existing.rotation) || 0,
-      hidden: sticker.hidden != null ? Boolean(sticker.hidden) : Boolean(existing.hidden),
-      locked: sticker.locked != null ? Boolean(sticker.locked) : Boolean(existing.locked),
-      position: Array.isArray(sticker.position) ? sticker.position.slice(0, 2) : existing.position,
-      imageUrl: sticker.imageUrl || existing.imageUrl || undefined,
-      updatedAt: Date.now()
-    };
-    const next = [compact, ...current.filter(item => item.id !== compact.id)];
-    await saveStickerInstances(next);
-    syncCustomStickerIdsToBridge();
-  }
-
-  async function mergeNativeStickerInstance(sticker) {
-    if (!sticker?.id) return;
-    const id = String(sticker.id);
-    if (stickerDeletedIds.has(id)) return;
-    const tombstones = await loadStickerTombstones();
-    if (tombstones.some(item => item.id === id)) return;
-    const current = await loadStickerInstances();
-    const existing = current.find(item => item.id === id);
-    if (!existing) return; // official/non-custom sticker: never adopt it into our cache
-    const scope = currentStickerScope();
-    const merged = {
-      ...existing,
-      gameId: existing.gameId || scope.gameId,
-      mapName: existing.mapName || scope.mapName,
-      name: sticker.name ?? existing.name,
-      type: sticker.type ?? existing.type,
-      imageKey: sticker.imageKey ?? existing.imageKey,
-      thumbnailKey: sticker.thumbnailKey ?? existing.thumbnailKey,
-      aspectRatio: Number(sticker.aspectRatio ?? existing.aspectRatio) || existing.aspectRatio || 1,
-      size: Number(sticker.size ?? existing.size) || existing.size || 1.5,
-      rotation: Number(sticker.rotation ?? existing.rotation) || 0,
-      hidden: sticker.hidden != null ? Boolean(sticker.hidden) : Boolean(existing.hidden),
-      locked: sticker.locked != null ? Boolean(sticker.locked) : Boolean(existing.locked),
-      position: Array.isArray(sticker.position) ? sticker.position.slice(0, 2) : existing.position,
-      imageUrl: sticker.imageUrl || existing.imageUrl,
-      libraryId: existing.libraryId,
-      updatedAt: Date.now()
-    };
-    await saveStickerInstances([merged, ...current.filter(item => item.id !== id)]);
-    syncCustomStickerIdsToBridge();
-  }
-
-  async function forgetStickerInstance(id) {
-    if (!id) return;
-    id = String(id);
-    stickerDeletedIds.add(id);
-    await markStickerDeleted(id);
-    const current = await loadStickerInstances();
-    await saveStickerInstances(current.filter(item => item.id !== id));
-    syncCustomStickerIdsToBridge();
-  }
-
-  function sendCustomSticker(sticker, hidden = false, options = {}) {
-    const id = options.id || crypto.randomUUID();
-    window.postMessage({
-      source: "ddb-qol-content",
-      type: "SEND_CUSTOM_STICKER",
-      payload: {
-        id,
-        libraryId: sticker.id || sticker.libraryId || "",
-        name: sticker.name || "Sticker",
-        type: sticker.type || "rectangle",
-        imageKey: options.imageKey || sticker.imageKey,
-        thumbnailKey: options.thumbnailKey || sticker.thumbnailKey,
-        imageUrl: sticker.imageUrl,
-        aspectRatio: Number(options.aspectRatio ?? sticker.aspectRatio) || 1,
-        size: Number(options.size ?? sticker.size) || 1.5,
-        rotation: Number(options.rotation ?? sticker.rotation) || 0,
-        position: Array.isArray(options.position ?? sticker.position) ? (options.position ?? sticker.position) : undefined,
-        hidden: Boolean(options.hidden ?? hidden),
-        locked: Boolean(options.locked ?? sticker.locked),
-        rehydrate: Boolean(options.rehydrate)
-      }
-    }, location.origin);
-    return id;
-  }
-
-  let stickerRehydrateInFlight = false;
-  async function rehydrateCustomStickers() {
-    if (stickerRehydrateInFlight) return;
-    syncCustomStickerIdsToBridge();
-    stickerRehydrateInFlight = true;
-    try {
-      const [list, library, tombstones] = await Promise.all([loadStickerInstances(), loadStickerLibrary(), loadStickerTombstones()]);
-      const deleted = new Set(tombstones.map(item => item.id));
-      const byLibraryId = new Map(library.map(item => [item.id, item]));
-      const scope = currentStickerScope();
-      for (const item of list) {
-        // Legacy unscoped snapshots are deliberately NOT replayed. They were the main
-        // cause of deleted/moved stickers being resurrected on a different map.
-        if (!sameStickerScope(item, scope)) continue;
-        if (deleted.has(item.id) || stickerDeletedIds.has(item.id)) continue;
-        const source = item.libraryId ? byLibraryId.get(item.libraryId) : item;
-        if (!source?.imageUrl) continue;
-        sendCustomSticker({ ...source, name: item.name || source.name, libraryId: item.libraryId || source.id }, Boolean(item.hidden), {
-          id: item.id,
-          imageKey: item.imageKey,
-          thumbnailKey: item.thumbnailKey,
-          aspectRatio: item.aspectRatio,
-          position: item.position,
-          size: item.size,
-          rotation: item.rotation,
-          hidden: item.hidden,
-          locked: item.locked,
-          rehydrate: true
-        });
-      }
-    } finally {
-      setTimeout(() => { stickerRehydrateInFlight = false; }, 1800);
-    }
-  }
-
-  let draggedCustomSticker = null;
-  const pendingStickerDrops = new Map();
-  let stickerDropHandlersInstalled = false;
-
-  function requestStickerDropPlacement(sticker, hidden, clientX, clientY) {
-    const requestId = crypto.randomUUID();
-    pendingStickerDrops.set(requestId, { sticker, hidden, createdAt: Date.now() });
-    window.postMessage({
-      source: "ddb-qol-content",
-      type: "RESOLVE_MAP_POINT",
-      requestId,
-      clientX,
-      clientY
-    }, location.origin);
-    stickerToast("Posicionando sticker...");
-    setTimeout(() => pendingStickerDrops.delete(requestId), 8000);
-  }
-
-  function installStickerDropHandlers() {
-    if (stickerDropHandlersInstalled) return;
-    stickerDropHandlersInstalled = true;
-    document.addEventListener("dragover", event => {
-      if (!draggedCustomSticker) return;
-      if (event.target?.closest?.(`#${EXT}-sticker-panel`)) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-      document.documentElement.classList.add(`${EXT}-sticker-drag-active`);
-    }, true);
-    document.addEventListener("drop", event => {
-      if (!draggedCustomSticker) return;
-      if (event.target?.closest?.(`#${EXT}-sticker-panel`)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const payload = draggedCustomSticker;
-      draggedCustomSticker = null;
-      document.documentElement.classList.remove(`${EXT}-sticker-drag-active`);
-      requestStickerDropPlacement(payload.item, payload.hidden, event.clientX, event.clientY);
-    }, true);
-    document.addEventListener("dragend", () => {
-      draggedCustomSticker = null;
-      document.documentElement.classList.remove(`${EXT}-sticker-drag-active`);
-    }, true);
-  }
-
-  async function renderStickerLibrary(panel) {
-    installStickerDropHandlers();
-    const grid = panel.querySelector(`.${EXT}-sticker-grid`);
-    const list = await loadStickerLibrary();
-    grid.innerHTML = list.length ? "" : `<div class="${EXT}-sticker-empty">Nenhum sticker salvo ainda.</div>`;
-    for (const item of list) {
-      const card = document.createElement("div");
-      card.className = `${EXT}-sticker-card`;
-      card.draggable = true;
-      card.dataset.stickerId = item.id;
-      card.innerHTML = `
-        <img alt="" draggable="false">
-        <div class="${EXT}-sticker-card-name"></div>
-        <div class="${EXT}-sticker-drag-hint">↗ Arraste para o mapa</div>
-        <div class="${EXT}-sticker-card-actions">
-          <label class="${EXT}-sticker-hidden-toggle" title="Se marcado, o sticker nasce oculto para jogadores">
-            <input type="checkbox" data-act="hidden"> Oculto
-          </label>
-          <button type="button" data-act="delete" title="Remover da biblioteca">×</button>
-        </div>`;
-      const preview = card.querySelector("img");
-      if (preview) preview.src = item.imageUrl;
-      card.querySelector(`.${EXT}-sticker-card-name`).textContent = item.name;
-      const hiddenInput = card.querySelector('[data-act="hidden"]');
-      card.addEventListener("dragstart", event => {
-        draggedCustomSticker = { item, hidden: Boolean(hiddenInput?.checked) };
-        try {
-          event.dataTransfer.effectAllowed = "copy";
-          event.dataTransfer.setData("application/x-ddb-qol-sticker", item.id);
-          event.dataTransfer.setData("text/plain", item.name || "Sticker");
-          const img = card.querySelector("img");
-          if (img && event.dataTransfer.setDragImage) event.dataTransfer.setDragImage(img, Math.min(45, img.clientWidth / 2), Math.min(45, img.clientHeight / 2));
-        } catch {}
-      });
-      card.querySelector('[data-act="delete"]').addEventListener("click", async event => {
-        event.preventDefault();
-        event.stopPropagation();
-        const next = (await loadStickerLibrary()).filter(x => x.id !== item.id);
-        await saveStickerLibrary(next);
-        // Remove only library metadata. Placed instances are independent and remain on the map.
-        await renderStickerLibrary(panel);
-      });
-      grid.appendChild(card);
-    }
-  }
-
-  let lastMapSelectorRect = null;
-
   function cleanCurrentMapLabel(value) {
     return String(value || "")
       .replace(/\s+/g, " ")
@@ -5275,195 +4905,6 @@
     }
     return best?.el || null;
   }
-
-  function currentMapScopeName() {
-    const selector = findCurrentMapSelector();
-    const live = cleanCurrentMapLabel(selector?.innerText || selector?.textContent || "");
-    if (live) {
-      try { sessionStorage.setItem("ddbQolCurrentMapNameV1", live); } catch {}
-      return live;
-    }
-    try { return String(sessionStorage.getItem("ddbQolCurrentMapNameV1") || "").trim(); } catch { return ""; }
-  }
-
-  function saveMapSelectorRect(rect) {
-    if (!rect || rect.width < 80 || rect.height < 20) return;
-    lastMapSelectorRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom };
-    try { sessionStorage.setItem("ddbQolMapSelectorRectV1", JSON.stringify(lastMapSelectorRect)); } catch {}
-  }
-
-  function readMapSelectorRect() {
-    if (lastMapSelectorRect) return lastMapSelectorRect;
-    try {
-      const parsed = JSON.parse(sessionStorage.getItem("ddbQolMapSelectorRectV1") || "null");
-      if (parsed && [parsed.left, parsed.top, parsed.width, parsed.height].every(Number.isFinite)) lastMapSelectorRect = parsed;
-    } catch {}
-    return lastMapSelectorRect;
-  }
-
-  function placeStickerLauncherInToolbar() {
-    const launcher = document.getElementById(`${EXT}-sticker-launcher`);
-    if (!launcher) return false;
-    if (launcher.parentElement !== document.body) document.body.appendChild(launcher);
-
-    const selector = findCurrentMapSelector();
-    let rect = selector?.getBoundingClientRect?.();
-    if (rect && rect.width >= 80 && rect.height >= 20) saveMapSelectorRect(rect);
-    else rect = readMapSelectorRect();
-
-    if (!rect) {
-      launcher.style.setProperty("visibility", "hidden", "important");
-      launcher.style.setProperty("pointer-events", "none", "important");
-      return false;
-    }
-
-    const size = Math.max(28, Math.min(34, Math.round(rect.height - 4) || 30));
-    const gap = 6;
-    const left = Math.max(8, Math.min(window.innerWidth - size - 8, rect.right + gap));
-    const top = Math.max(6, Math.min(window.innerHeight - size - 6, rect.top + (rect.height - size) / 2));
-    launcher.classList.add(`${EXT}-sticker-toolbar-button`);
-    launcher.style.setProperty("display", "grid", "important");
-    launcher.style.setProperty("visibility", "visible", "important");
-    launcher.style.setProperty("opacity", "1", "important");
-    launcher.style.setProperty("pointer-events", "auto", "important");
-    launcher.style.setProperty("position", "fixed", "important");
-    launcher.style.setProperty("left", `${left}px`, "important");
-    launcher.style.setProperty("top", `${top}px`, "important");
-    launcher.style.setProperty("right", "auto", "important");
-    launcher.style.setProperty("bottom", "auto", "important");
-    launcher.style.setProperty("width", `${size}px`, "important");
-    launcher.style.setProperty("height", `${size}px`, "important");
-    launcher.style.setProperty("z-index", "2147483000", "important");
-    return true;
-  }
-
-  function positionStickerPanel() {
-    const launcher = document.getElementById(`${EXT}-sticker-launcher`);
-    const panel = document.getElementById(`${EXT}-sticker-panel`);
-    if (!launcher || !panel || panel.hidden) return;
-    const rect = launcher.getBoundingClientRect();
-    const margin = 12;
-    const gap = 8;
-    const width = Math.min(360, Math.max(280, window.innerWidth - margin * 2));
-    const maxHeight = Math.max(180, window.innerHeight - margin * 2);
-    panel.style.setProperty("width", `${width}px`, "important");
-    panel.style.setProperty("max-height", `${maxHeight}px`, "important");
-    panel.style.setProperty("right", "auto", "important");
-    panel.style.setProperty("bottom", "auto", "important");
-
-    const left = Math.max(margin, Math.min(window.innerWidth - width - margin, rect.left));
-    panel.style.setProperty("left", `${left}px`, "important");
-
-    // Measure after width/max-height are applied and choose the side that fits.
-    const measuredHeight = Math.min(maxHeight, Math.max(180, panel.getBoundingClientRect().height || panel.scrollHeight || 360));
-    const roomBelow = window.innerHeight - rect.bottom - gap - margin;
-    const roomAbove = rect.top - gap - margin;
-    let top;
-    if (roomBelow >= Math.min(measuredHeight, 260) || roomBelow >= roomAbove) top = rect.bottom + gap;
-    else top = rect.top - gap - measuredHeight;
-    top = Math.max(margin, Math.min(window.innerHeight - measuredHeight - margin, top));
-    panel.style.setProperty("top", `${top}px`, "important");
-  }
-
-  let stickerPeerRehydrateTimer = null;
-  function scheduleStickerRehydrate(delay = 650) {
-    clearTimeout(stickerPeerRehydrateTimer);
-    stickerPeerRehydrateTimer = setTimeout(() => rehydrateCustomStickers().catch(() => {}), delay);
-  }
-
-  function injectCustomStickerUi() {
-    if (!isMapsPage() || SETTINGS.customStickers === false) return;
-
-    let launcher = document.getElementById(`${EXT}-sticker-launcher`);
-    let panel = document.getElementById(`${EXT}-sticker-panel`);
-    if (!launcher || !panel) {
-      customStickerUiReady = true;
-      launcher = document.createElement("button");
-      launcher.type = "button";
-      launcher.id = `${EXT}-sticker-launcher`;
-      launcher.className = `${EXT}-sticker-launcher`;
-      launcher.setAttribute("aria-label", "Adicionar sticker personalizado");
-      launcher.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v10a4 4 0 0 1-4 4H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm9 2v4h4"/><path d="M8 13h6M11 10v6"/></svg>`;
-      launcher.title = "Adicionar sticker personalizado";
-
-      panel = document.createElement("section");
-      panel.id = `${EXT}-sticker-panel`;
-      panel.className = `${EXT}-sticker-panel`;
-      panel.hidden = true;
-      panel.innerHTML = `
-        <div class="${EXT}-sticker-panel-head"><strong>Stickers personalizados</strong><button type="button" data-act="close">×</button></div>
-        <div class="${EXT}-sticker-panel-tools"><button type="button" data-act="upload">Escolher PNG / JPG / WebP</button><input type="file" accept="image/png,image/jpeg,image/webp" hidden></div>
-        <div class="${EXT}-sticker-hint">Arraste o sticker salvo para o mapa.</div>
-        <div class="${EXT}-sticker-grid"></div>`;
-
-      document.body.appendChild(launcher);
-      document.body.appendChild(panel);
-      const input = panel.querySelector('input[type="file"]');
-      launcher.addEventListener("click", event => {
-        event.stopPropagation();
-        panel.hidden = !panel.hidden;
-        if (!panel.hidden) {
-          renderStickerLibrary(panel);
-          requestAnimationFrame(() => { positionStickerPanel(); requestAnimationFrame(positionStickerPanel); });
-        }
-      });
-      panel.querySelector('[data-act="close"]').addEventListener("click", () => { panel.hidden = true; });
-      panel.querySelector('[data-act="upload"]').addEventListener("click", () => input.click());
-      input.addEventListener("change", async () => {
-        const file = input.files?.[0];
-        input.value = "";
-        if (!file) return;
-        try {
-          stickerToast("Preparando sticker...");
-          const sticker = await prepareStickerImage(file);
-          const current = await loadStickerLibrary();
-          await saveStickerLibrary([sticker, ...current.filter(x => x.name !== sticker.name || x.imageUrl !== sticker.imageUrl)]);
-          await renderStickerLibrary(panel);
-          stickerToast("Sticker salvo. Arraste o card para o mapa.");
-        } catch (error) {
-          stickerToast(error?.message || "Não foi possível preparar o sticker.", true);
-        }
-      });
-
-      window.addEventListener("resize", () => { placeStickerLauncherInToolbar(); positionStickerPanel(); }, { passive: true });
-      window.addEventListener("scroll", () => { placeStickerLauncherInToolbar(); positionStickerPanel(); }, { passive: true, capture: true });
-
-      window.addEventListener("message", event => {
-        const msg = event.data;
-        if (event.source !== window || event.origin !== location.origin || msg?.source !== "ddb-qol-page") return;
-        if (msg.type === "MAP_POINT_RESOLVED") {
-          const pending = pendingStickerDrops.get(String(msg.requestId || ""));
-          if (pending) {
-            pendingStickerDrops.delete(String(msg.requestId || ""));
-            if (Array.isArray(msg.position) && msg.position.length >= 2) {
-              sendCustomSticker(pending.sticker, pending.hidden, { position: msg.position });
-              panel.hidden = true;
-            } else {
-              stickerToast(msg.error || "Não consegui posicionar o sticker nesse ponto.", true);
-            }
-          }
-        }
-        if (msg.type === "CUSTOM_STICKER_SENT") {
-          if (msg.sticker && !msg.rehydrate) rememberStickerInstance(msg.sticker).catch(() => {});
-          if (!msg.rehydrate && !msg.silent) stickerToast("Sticker colocado no mapa.");
-        }
-        if (msg.type === "CUSTOM_STICKER_NATIVE_UPSERT" && msg.sticker) mergeNativeStickerInstance(msg.sticker).catch(() => {});
-        if (msg.type === "CUSTOM_STICKER_REMOVED_NATIVE") forgetStickerInstance(msg.id).catch(() => {});
-        // Give DDB time to deliver its snapshot first; then reapply imageUrl onto the latest native state.
-        if (msg.type === "MAP_SOCKET_READY") scheduleStickerRehydrate(2200);
-        if (msg.type === "MAP_PEER_RECONNECT") scheduleStickerRehydrate(1700);
-        if (msg.type === "CUSTOM_STICKER_ERROR") stickerToast(msg.message || "Para ativar o drop de stickers: pressione X e faça 1 Ping em qualquer ponto do mapa. Depois arraste o sticker novamente.", true);
-      });
-      syncCustomStickerIdsToBridge();
-      window.postMessage({ source: "ddb-qol-content", type: "REQUEST_MAP_SOCKET_READY" }, location.origin);
-      setInterval(() => { if (document.visibilityState === "visible") placeStickerLauncherInToolbar(); }, 700);
-
-    }
-
-    placeStickerLauncherInToolbar();
-    positionStickerPanel();
-  }
-
 
   function styleHomebrewStatblockHeadings() {
     if (!isMapsPage()) return;
@@ -5524,15 +4965,12 @@
         mapsDetected,
         gameLogReady: Boolean(mapsPage && bridge?.bridgeLoaded && SETTINGS.damageApplicator !== false),
         mapSocketReady: Boolean(bridge?.mapSocketReady),
-        stickerDropReady: SETTINGS.customStickers === false ? null : Boolean(bridge?.stickerDropReady),
-        stickerCalibrationAnchors: Number(bridge?.calibrationAnchors || 0),
         importerAvailable: Boolean(SETTINGS.hbButtons !== false && (mapsPage || createPage || editPage)),
         settings: {
           hbButtons: SETTINGS.hbButtons !== false,
           damageApplicator: SETTINGS.damageApplicator !== false,
           extendedBestiary: SETTINGS.extendedBestiary !== false,
-          mapSearch: SETTINGS.mapSearch !== false,
-          customStickers: SETTINGS.customStickers !== false
+          mapSearch: SETTINGS.mapSearch !== false
         }
       });
     })().catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
@@ -5553,7 +4991,6 @@
       syncQuickHpHud();
       syncGameLogQuickDamageButtons();
       injectMapSearch();
-      injectCustomStickerUi();
       styleHomebrewStatblockHeadings();
       if (location.pathname.includes("/homebrew/creations/create-monster/create")) makeImporterPanel();
     }, 180);
@@ -5573,7 +5010,6 @@
     syncQuickHpHud();
     syncGameLogQuickDamageButtons();
     injectMapSearch();
-    injectCustomStickerUi();
     styleHomebrewStatblockHeadings();
     if (location.pathname.includes("/homebrew/creations/create-monster/create")) makeImporterPanel();
     if (/\/homebrew\/creations\/monsters\/\d+-[^/]+\/edit/i.test(location.pathname)) {
@@ -5581,13 +5017,12 @@
     }
 
     // The loader is only useful when startup is perceptibly slow. On Maps, wait
-    // briefly for the map surface and the optional sticker launcher before hiding it.
+    // briefly for the map surface before hiding it.
     if (isMapsPage()) {
       const deadline = performance.now() + 5000;
       while (performance.now() < deadline) {
         const mapSurfaceReady = [...document.querySelectorAll("canvas")].some(isVisible) || Boolean(findCurrentMapSelector());
-        const stickerReady = SETTINGS.customStickers === false || placeStickerLauncherInToolbar();
-        if (mapSurfaceReady && stickerReady) break;
+        if (mapSurfaceReady) break;
         await sleep(120);
       }
     }
