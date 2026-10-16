@@ -1,4 +1,11 @@
-# DDB Maps QoL — v0.3.36
+# DDB Maps QoL — v0.3.37
+
+## v0.3.37 — correção do preenchimento automático de HP
+
+- O último dano rolado só é inserido em um campo numérico do painel nativo HEAL/DAMAGE.
+- Cliques no nome do token ou em outros controles não disparam a rotina.
+- Antes de alterar qualquer valor, a extensão verifica se o mesmo painel de HP continua aberto.
+- O HUD rápido de HP continua com a própria sugestão de dano.
 
 ## v0.3.36 — simplificação do Maps
 

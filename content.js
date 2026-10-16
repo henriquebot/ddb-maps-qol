@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  console.info("[DDB QoL] content v0.3.36 carregado em", location.href);
+  console.info("[DDB QoL] content v0.3.37 carregado em", location.href);
 
   const EXT = "ddb-qol";
   const SRC_ROOT = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/";
@@ -3324,7 +3324,9 @@
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   function visibleDamageHealButtons() {
-    const buttons = [...document.querySelectorAll("button")].filter(button => isVisible(button) && !button.closest(`.${EXT}-modal-backdrop`));
+    const buttons = [...document.querySelectorAll("button")].filter(button =>
+      isVisible(button) && !button.closest(`.${EXT}-modal-backdrop, #${EXT}-quick-hp-hud`)
+    );
     return {
       damage: buttons.find(button => /(^|\s)damage(\s|$)/i.test(String(button.innerText || button.textContent || ""))),
       heal: buttons.find(button => /(^|\s)heal(\s|$)/i.test(String(button.innerText || button.textContent || "")))
@@ -3335,9 +3337,12 @@
     const started = Date.now();
     while (Date.now() - started < timeout) {
       const buttons = visibleDamageHealButtons();
-      if (buttons.damage || buttons.heal) return buttons;
-      const fallbackInput = findVisibleHpAmountInput();
-      if (fallbackInput) return { input: fallbackInput };
+      // Do not search the whole document for a generic field. The native HP
+      // flyout must expose HEAL + DAMAGE and its own numeric amount input.
+      if (buttons.damage && buttons.heal) {
+        const input = findHpAmountInputByLayout(buttons);
+        if (input) return { ...buttons, input };
+      }
       await sleep(50);
     }
     return {};
@@ -3362,68 +3367,46 @@
       || button.parentElement;
   }
 
-  function scoreHpInput(input, root = null) {
-    if (!input || !isVisible(input) || input.closest(`.${EXT}-modal-backdrop`)) return -999;
-    let context = normalize(input.getAttribute?.("aria-label") || input.placeholder || input.closest("label")?.innerText || "");
-    for (let cur = input.parentElement, i = 0; cur && i < 4; cur = cur.parentElement, i++) {
-      context += ` ${normalize(cur.innerText || "")}`;
-      if (root && cur === root) break;
-    }
-    let score = 0;
-    if (/damage/.test(context)) score += 7;
-    if (/heal/.test(context)) score += 3;
-    if (/\bhp\b|hit points|health/.test(context)) score += 4;
-    if (/amount|adjust/.test(context)) score += 2;
-    if (/temp|temporary|max hp|maximum|override/.test(context)) score -= 10;
-    if (/search|filter|initiative/.test(context)) score -= 8;
-    if (input.type === "number" || input.inputMode === "numeric") score += 2;
-    return score;
-  }
-
-  function findVisibleHpAmountInput(root = null) {
-    const scope = root || document;
-    const inputs = [...scope.querySelectorAll('input:not([type="hidden"]),textarea')].filter(isVisible);
-    const ranked = inputs
-      .map(input => ({ input, score: scoreHpInput(input, root) }))
-      .sort((a, b) => b.score - a.score);
-    return ranked[0]?.score >= 4 ? ranked[0].input : null;
+  function isNativeHpAmountField(input) {
+    // Name editors are text fields. Restrict auto-fill to actual numeric
+    // controls; never infer an HP field from text in a distant ancestor.
+    if (!input || input.tagName !== "INPUT" || !isVisible(input) ||
+        input.closest(`.${EXT}-modal-backdrop, #${EXT}-quick-hp-hud`)) return false;
+    const type = String(input.type || "").toLowerCase();
+    const inputMode = String(input.inputMode || "").toLowerCase();
+    if (type !== "number" && inputMode !== "numeric" && inputMode !== "decimal") return false;
+    const label = normalize([
+      input.getAttribute?.("aria-label"),
+      input.getAttribute?.("name"),
+      input.placeholder,
+      input.closest("label")?.innerText
+    ].filter(Boolean).join(" "));
+    return !/\bname\b|rename|token|search|filter|initiative|temp|temporary|maximum|max hp|override/.test(label);
   }
 
   function findHpAmountInputByLayout(buttons = visibleDamageHealButtons()) {
+    if (!buttons.damage || !buttons.heal) return null;
     const root = hpPanelRoot(buttons);
-    if (!root) return null;
-    const candidates = [...root.querySelectorAll('input:not([type="hidden"]),textarea')].filter(input => {
-      if (!isVisible(input) || input.closest(`.${EXT}-modal-backdrop`)) return false;
-      const context = normalize(`${input.getAttribute?.("aria-label") || ""} ${input.placeholder || ""} ${input.closest("label")?.innerText || ""}`);
-      return !/temp|temporary|max hp|maximum|override|search|filter|initiative/.test(context);
-    });
+    if (!root || root === document.body || root === document.documentElement) return null;
+
+    const candidates = [...root.querySelectorAll("input")]
+      .filter(isNativeHpAmountField);
     if (!candidates.length) return null;
 
-    const healRect = buttons.heal?.getBoundingClientRect?.();
-    const damageRect = buttons.damage?.getBoundingClientRect?.();
-    if (healRect && damageRect) {
-      const left = Math.min(healRect.right, damageRect.right);
-      const right = Math.max(healRect.left, damageRect.left);
-      const middle = candidates
-        .map(input => ({ input, rect: input.getBoundingClientRect() }))
-        .filter(item => item.rect.left >= left - 24 && item.rect.right <= right + 24 && Math.abs(item.rect.top - healRect.top) < 80)
-        .sort((a, b) => Math.abs((a.rect.left + a.rect.right) / 2 - (healRect.right + damageRect.left) / 2) - Math.abs((b.rect.left + b.rect.right) / 2 - (healRect.right + damageRect.left) / 2));
-      if (middle[0]?.input) return middle[0].input;
-    }
+    const healRect = buttons.heal.getBoundingClientRect();
+    const damageRect = buttons.damage.getBoundingClientRect();
+    const left = Math.min(healRect.right, damageRect.right);
+    const right = Math.max(healRect.left, damageRect.left);
+    const middle = candidates.filter(input => {
+      const rect = input.getBoundingClientRect();
+      return rect.left >= left - 24 && rect.right <= right + 24 &&
+        Math.abs(rect.top - healRect.top) < 80;
+    });
+    if (middle.length === 1) return middle[0];
 
-    // Current Maps HP flyout has a single editable amount box between HEAL and
-    // DAMAGE. When its accessible labels change, one visible numeric field in
-    // the HP panel is still a safe fallback.
-    if (candidates.length === 1) return candidates[0];
-    return candidates
-      .map(input => ({ input, score: scoreHpInput(input, root) }))
-      .sort((a, b) => b.score - a.score)[0]?.input || null;
-  }
-
-  function findDamageAmountInput(actionButton) {
-    const buttons = visibleDamageHealButtons();
-    const root = hpPanelRoot(buttons) || actionButton?.parentElement || document;
-    return findVisibleHpAmountInput(root) || findHpAmountInputByLayout(buttons) || findVisibleHpAmountInput();
+    // If the native flyout has exactly one numeric field, it is the amount.
+    // Multiple ambiguous fields must not be auto-filled.
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   async function prefillNativeHpDamage(target = lastHpTarget) {
@@ -3434,9 +3417,9 @@
     }
     if (!lastDamageProfile) return;
     const buttons = await waitForHpFlyout(1600);
-    const actionButton = buttons.damage || null;
-    const input = buttons.input || findDamageAmountInput(actionButton);
-    if (!input || input.dataset.ddbQolPrefilledFor === String(lastDamageMessage.id)) return;
+    const input = buttons.input;
+    if (!input || !isNativeHpAmountField(input) ||
+        input.dataset.ddbQolPrefilledFor === String(lastDamageMessage.id)) return;
 
     // If Maps no longer exposes the selected token through the HP header, still
     // offer the last rolled damage. When we do know the target, preserve the
@@ -3446,6 +3429,12 @@
       ? await adjustedDamageForTarget(target, lastDamageProfile).catch(() => rawAmount)
       : rawAmount;
     if (!Number.isFinite(amount)) return;
+    // The user may have opened a name editor while defense lookup was running.
+    // Revalidate the *same* native HP flyout immediately before writing.
+    const current = visibleDamageHealButtons();
+    if (!isNativeHpAmountField(input) ||
+        current.damage !== buttons.damage || current.heal !== buttons.heal ||
+        !hpPanelRoot(current)?.contains(input)) return;
     if (!String(input.value || "").trim() || /^0+$/.test(String(input.value || "").trim()) || input.dataset.ddbQolAutoValue === String(input.value)) {
       nativeSetInputValue(input, Math.max(0, Math.floor(amount)));
       input.dataset.ddbQolPrefilledFor = String(lastDamageMessage.id);
@@ -3473,16 +3462,18 @@
     if (hpPrefillCaptureInstalled) return;
     hpPrefillCaptureInstalled = true;
     document.addEventListener("click", event => {
-      if (!lastDamageMessage) requestLastDamage().catch(() => {});
       const trigger = event.target?.closest?.("button");
-      if (trigger) {
-        const hp = parseHpText(trigger.innerText || trigger.textContent || trigger.getAttribute("aria-label") || trigger.title);
-        if (hp) {
-          window.postMessage({ source: "ddb-qol-content", type: "ANNOTATE_HP_TARGETS" }, location.origin);
-          const fresh = discoverHpTargets().find(item => item.hpButton === trigger);
-          if (fresh) lastHpTarget = fresh;
-        }
-      }
+      if (!trigger) return;
+      // Only an actual HP badge opens a prefill opportunity. Clicking a token
+      // name, text editor, or any other button must never schedule a prefill.
+      const hp = parseHpText(trigger.innerText || trigger.textContent ||
+        trigger.getAttribute("aria-label") || trigger.title);
+      if (!hp) return;
+      window.postMessage({ source: "ddb-qol-content", type: "ANNOTATE_HP_TARGETS" }, location.origin);
+      const fresh = discoverHpTargets().find(item => item.hpButton === trigger);
+      if (!fresh) return;
+      lastHpTarget = fresh;
+      if (!lastDamageMessage) requestLastDamage().catch(() => {});
       for (const delay of [70, 180, 380, 750]) {
         setTimeout(() => prefillNativeHpDamage(lastHpTarget).catch(() => {}), delay);
       }
