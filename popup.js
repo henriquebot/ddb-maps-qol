@@ -3,15 +3,13 @@ const defaults = {
   hbButtons: true,
   damageApplicator: true,
   extendedBestiary: true,
-  mapSearch: true,
-  customStickers: true
+  mapSearch: true
 };
 const map = {
   hb: "hbButtons",
   damage: "damageApplicator",
   extended: "extendedBestiary",
-  maps: "mapSearch",
-  stickers: "customStickers"
+  maps: "mapSearch"
 };
 
 (async () => {
@@ -21,6 +19,7 @@ const map = {
 
   const stored = (await chrome.storage.local.get(KEY))[KEY] || {};
   const settings = { ...defaults, ...stored };
+  delete settings.customStickers;
   await chrome.storage.local.set({ [KEY]: settings });
 
   for (const [id, key] of Object.entries(map)) {
@@ -79,7 +78,6 @@ async function refreshStatusPanel() {
     if (info.type === "5etools Bestiary") {
       setStatus("status-maps", "—", "off");
       setStatus("status-gamelog", "—", "off");
-      setStatus("status-stickers", "—", "off");
       setStatus("status-importer", "Disponível", "ok");
       return;
     }
@@ -87,17 +85,12 @@ async function refreshStatusPanel() {
     if (!status?.ok) {
       setStatus("status-maps", "Não detectado", "off");
       setStatus("status-gamelog", "—", "off");
-      setStatus("status-stickers", "—", "off");
       setStatus("status-importer", /Homebrew/i.test(info.type) ? "Disponível" : "—", /Homebrew/i.test(info.type) ? "ok" : "off");
       return;
     }
 
     setStatus("status-maps", status.mapsDetected ? "Detectado" : "—", status.mapsDetected ? "ok" : "off");
     setStatus("status-gamelog", status.gameLogReady ? "Ativo" : "—", status.gameLogReady ? "ok" : "off");
-    if (status.settings?.customStickers === false) setStatus("status-stickers", "Desativados", "off");
-    else if (status.page !== "maps") setStatus("status-stickers", "—", "off");
-    else if (status.stickerDropReady) setStatus("status-stickers", "Pronto", "ok");
-    else setStatus("status-stickers", "Faça X + Ping", "warn");
     setStatus("status-importer", status.importerAvailable ? "Disponível" : "—", status.importerAvailable ? "ok" : "off");
   } catch {
     if (pageEl) pageEl.textContent = "não disponível";
@@ -110,13 +103,6 @@ async function buildDiagnosticText() {
   const stored = (await chrome.storage.local.get(KEY))[KEY] || {};
   const cfg = { ...defaults, ...stored };
   const yesNo = value => value ? "sim" : "não";
-  const sticker = status?.settings?.customStickers === false
-    ? "desativados"
-    : status?.stickerDropReady
-      ? "pronto"
-      : status?.page === "maps"
-        ? "requer X + Ping"
-        : "n/a";
   return [
     "DDB Maps QoL — diagnóstico",
     `Versão: ${version}`,
@@ -125,9 +111,8 @@ async function buildDiagnosticText() {
     `Maps detectado: ${yesNo(Boolean(status?.mapsDetected))}`,
     `Game Log: ${yesNo(Boolean(status?.gameLogReady))}`,
     `Socket do Maps: ${yesNo(Boolean(status?.mapSocketReady))}`,
-    `Stickers: ${sticker}`,
     `Importer disponível: ${yesNo(info.type === "5etools Bestiary" || Boolean(status?.importerAvailable))}`,
-    `Config — HB:${yesNo(cfg.hbButtons !== false)} Damage:${yesNo(cfg.damageApplicator !== false)} Bestiary:${yesNo(cfg.extendedBestiary !== false)} Maps:${yesNo(cfg.mapSearch !== false)} Stickers:${yesNo(cfg.customStickers !== false)}`
+    `Config — HB:${yesNo(cfg.hbButtons !== false)} Damage:${yesNo(cfg.damageApplicator !== false)} Bestiary:${yesNo(cfg.extendedBestiary !== false)} Maps:${yesNo(cfg.mapSearch !== false)}`
   ].join("\n");
 }
 

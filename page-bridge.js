@@ -12,7 +12,6 @@
   const entityByAnyId = new Map();
   const runtimeSceneTokenIndex = new Map();
   const mapMetaIndex = new Map();
-  const customStickerIds = new Set();
   let activeSceneIdentity = "";
   let activeSceneEpoch = 0;
 
@@ -521,13 +520,8 @@
   let ddbMapSocket = null;
   let ddbMapClientId = null;
   let ddbMapActionIndex = 0;
-  let ddbLastPingPosition = null;
-  let ddbSocketReadyPosted = false;
-  let ddbLastPeerSignal = 0;
   const observedSockets = new WeakSet();
   const originalWsSend = WebSocket.prototype.send;
-  let lastPointerSample = null;
-  const mapCalibrationAnchors = [];
 
   // Lightweight diagnostics for intermittent Maps disconnects/performance stalls.
   // No message payloads, campaign IDs, token IDs, or player data are recorded.
@@ -645,13 +639,6 @@
   }
 
 
-  document.addEventListener("pointermove", event => {
-    lastPointerSample = { x: event.clientX, y: event.clientY, at: Date.now() };
-  }, { capture: true, passive: true });
-  document.addEventListener("pointerup", event => {
-    lastPointerSample = { x: event.clientX, y: event.clientY, at: Date.now() };
-  }, { capture: true, passive: true });
-
   function validWorldPoint(value) {
     if (Array.isArray(value) && value.length >= 2) {
       const x = Number(value[0]), y = Number(value[1]);
@@ -664,466 +651,12 @@
     return null;
   }
 
-  function addMapCalibrationAnchor(screenX, screenY, position, source = "native") {
-    const world = validWorldPoint(position);
-    if (!world || !Number.isFinite(screenX) || !Number.isFinite(screenY)) return;
-    const anchor = { sx: Number(screenX), sy: Number(screenY), wx: world[0], wy: world[1], source, at: Date.now() };
-    const duplicate = mapCalibrationAnchors.find(item =>
-      Math.hypot(item.sx - anchor.sx, item.sy - anchor.sy) < 3 &&
-      Math.hypot(item.wx - anchor.wx, item.wy - anchor.wy) < 0.02
-    );
-    if (!duplicate) mapCalibrationAnchors.push(anchor);
-    while (mapCalibrationAnchors.length > 40) mapCalibrationAnchors.shift();
-  }
-
-  function fitLinearAxis(anchors, screenKey, worldKey) {
-    if (anchors.length < 2) return null;
-    const meanS = anchors.reduce((n, a) => n + a[screenKey], 0) / anchors.length;
-    const meanW = anchors.reduce((n, a) => n + a[worldKey], 0) / anchors.length;
-    let cov = 0, variance = 0;
-    for (const a of anchors) {
-      const ds = a[screenKey] - meanS;
-      cov += ds * (a[worldKey] - meanW);
-      variance += ds * ds;
-    }
-    if (variance < 25) return null;
-    const scale = cov / variance;
-    if (!Number.isFinite(scale) || Math.abs(scale) < 1e-8 || Math.abs(scale) > 10) return null;
-    return { scale, offset: meanW - scale * meanS };
-  }
-
-  function calibratedMapPoint(clientX, clientY) {
-    const recent = mapCalibrationAnchors.filter(a => Date.now() - a.at < 30 * 60 * 1000);
-    const fx = fitLinearAxis(recent, "sx", "wx");
-    const fy = fitLinearAxis(recent, "sy", "wy");
-    if (!fx || !fy) return null;
-    const out = [fx.scale * clientX + fx.offset, fy.scale * clientY + fy.offset];
-    return validWorldPoint(out);
-  }
-
-  function mapCanvasForPoint(clientX, clientY) {
-    const direct = document.elementsFromPoint(clientX, clientY).find(el => el?.tagName === "CANVAS");
-    if (direct) return direct;
-    const canvases = [...document.querySelectorAll("canvas")]
-      .map(el => ({ el, rect: el.getBoundingClientRect?.() }))
-      .filter(item => item.rect && item.rect.width >= 240 && item.rect.height >= 180 &&
-        clientX >= item.rect.left && clientX <= item.rect.right && clientY >= item.rect.top && clientY <= item.rect.bottom)
-      .sort((a, b) => (b.rect.width * b.rect.height) - (a.rect.width * a.rect.height));
-    return canvases[0]?.el || null;
-  }
-
-  function applyMatrix4Raw(v, elements) {
-    if (!Array.isArray(elements) && !(elements instanceof Float32Array) && !(elements instanceof Float64Array)) return null;
-    if (elements.length < 16) return null;
-    const x = Number(v[0]), y = Number(v[1]), z = Number(v[2]), w = Number(v[3] ?? 1);
-    const out = [
-      elements[0] * x + elements[4] * y + elements[8] * z + elements[12] * w,
-      elements[1] * x + elements[5] * y + elements[9] * z + elements[13] * w,
-      elements[2] * x + elements[6] * y + elements[10] * z + elements[14] * w,
-      elements[3] * x + elements[7] * y + elements[11] * z + elements[15] * w
-    ];
-    return out.every(Number.isFinite) ? out : null;
-  }
-
-  function unprojectWithCamera(camera, ndcX, ndcY, ndcZ) {
-    const projectionInverse = camera?.projectionMatrixInverse?.elements;
-    const matrixWorld = camera?.matrixWorld?.elements;
-    if (!projectionInverse || !matrixWorld) return null;
-    let p = applyMatrix4Raw([ndcX, ndcY, ndcZ, 1], projectionInverse);
-    if (!p || Math.abs(p[3]) < 1e-10) return null;
-    p = [p[0] / p[3], p[1] / p[3], p[2] / p[3], 1];
-    p = applyMatrix4Raw(p, matrixWorld);
-    if (!p || Math.abs(p[3]) < 1e-10) return null;
-    return [p[0] / p[3], p[1] / p[3], p[2] / p[3]];
-  }
-
-  function cameraPointOnMapPlane(camera, canvas, clientX, clientY) {
-    const rect = canvas?.getBoundingClientRect?.();
-    if (!rect || rect.width < 20 || rect.height < 20) return null;
-    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = 1 - ((clientY - rect.top) / rect.height) * 2;
-    const near = unprojectWithCamera(camera, ndcX, ndcY, -1);
-    const far = unprojectWithCamera(camera, ndcX, ndcY, 1);
-    if (!near || !far) return null;
-    const dz = far[2] - near[2];
-    if (!Number.isFinite(dz) || Math.abs(dz) < 1e-9) return null;
-    const t = -near[2] / dz;
-    if (!Number.isFinite(t) || Math.abs(t) > 1e6) return null;
-    const point = [near[0] + (far[0] - near[0]) * t, near[1] + (far[1] - near[1]) * t];
-    if (!validWorldPoint(point) || Math.abs(point[0]) > 1e7 || Math.abs(point[1]) > 1e7) return null;
-    return point;
-  }
-
-  function cameraMapPoint(clientX, clientY) {
-    const canvas = mapCanvasForPoint(clientX, clientY);
-    if (!canvas) return null;
-    const roots = reactRoots(canvas);
-    for (let cur = canvas.parentElement, i = 0; cur && i < 5; i++, cur = cur.parentElement) {
-      for (const root of reactRoots(cur)) roots.push(root);
-    }
-    const seen = new WeakSet();
-    let budget = 18000;
-    let found = null;
-    const walk = (value, depth = 0) => {
-      if (found || !value || typeof value !== "object" || seen.has(value) || depth > 11 || budget-- <= 0) return;
-      seen.add(value);
-      const candidates = [];
-      if (value?.isCamera) candidates.push(value);
-      if (value?.camera?.isCamera) candidates.push(value.camera);
-      if (value?.state?.camera?.isCamera) candidates.push(value.state.camera);
-      for (const camera of candidates) {
-        const point = cameraPointOnMapPlane(camera, canvas, clientX, clientY);
-        if (point) { found = point; return; }
-      }
-      if (Array.isArray(value)) {
-        for (const child of value.slice(0, 180)) walk(child, depth + 1);
-        return;
-      }
-      let entries = [];
-      try { entries = Object.entries(value).slice(0, 120); } catch { return; }
-      for (const [key, child] of entries) {
-        if (["return", "sibling", "_owner"].includes(key)) continue;
-        if (key === "stateNode" && child?.nodeType) continue;
-        if (child && typeof child === "object") walk(child, depth + 1);
-        if (found) return;
-      }
-    };
-    for (const root of roots) {
-      walk(root, 0);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function converterMapPoint(clientX, clientY) {
-    const roots = [];
-    const seenRoot = new Set();
-    for (const el of document.elementsFromPoint(clientX, clientY).slice(0, 10)) {
-      for (const root of reactRoots(el)) {
-        if (root && !seenRoot.has(root)) { seenRoot.add(root); roots.push(root); }
-      }
-    }
-    const seen = new WeakSet();
-    let budget = 6000;
-    const methodNames = [
-      "screenToWorld", "clientToWorld", "viewportToWorld", "screenToMap", "clientToMap",
-      "pointToWorld", "getWorldPoint", "toWorld"
-    ];
-    const tryResult = result => {
-      const point = validWorldPoint(result);
-      if (!point) return null;
-      if (Math.abs(point[0]) > 1e7 || Math.abs(point[1]) > 1e7) return null;
-      return point;
-    };
-    const walk = (value, depth = 0) => {
-      if (!value || typeof value !== "object" || seen.has(value) || depth > 8 || budget-- <= 0) return null;
-      seen.add(value);
-      for (const name of methodNames) {
-        const fn = value?.[name];
-        if (typeof fn !== "function") continue;
-        for (const args of [[clientX, clientY], [{ x: clientX, y: clientY }]]) {
-          try {
-            const point = tryResult(fn.apply(value, args));
-            if (point) return point;
-          } catch {}
-        }
-      }
-      if (Array.isArray(value)) {
-        for (const child of value.slice(0, 120)) {
-          const found = walk(child, depth + 1);
-          if (found) return found;
-        }
-        return null;
-      }
-      for (const [key, child] of Object.entries(value)) {
-        if (["return", "sibling", "stateNode", "_owner"].includes(key)) continue;
-        if (child && typeof child === "object") {
-          const found = walk(child, depth + 1);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    for (const root of roots) {
-      const found = walk(root, 0);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function nearbyName(el) {
-    for (let cur = el, i = 0; cur && i < 4; i++, cur = cur.parentElement) {
-      const text = String(cur.innerText || cur.textContent || "").split(/\n+/).map(v => v.trim()).filter(Boolean);
-      const candidate = text.find(v => v.length > 1 && v.length < 80 && !/^\d+\s*\/\s*\d+$/.test(v));
-      if (candidate) return candidate;
-    }
-    return "";
-  }
-
-  function positionCandidateFromRoots(roots, wantedName = "") {
-    const wanted = normalizeIndexName(wantedName);
-    const seen = new WeakSet();
-    let best = null;
-    let budget = 5000;
-    const walk = (value, depth = 0) => {
-      if (!value || typeof value !== "object" || seen.has(value) || depth > 8 || budget-- <= 0) return;
-      seen.add(value);
-      const point = validWorldPoint(value.position || value.coordinates || value.worldPosition || value.tokenPosition);
-      if (point) {
-        const name = normalizeIndexName(value.name || value.displayName || value.tokenName || value?.definition?.name || "");
-        let score = 1;
-        if (wanted && name === wanted) score += 10;
-        else if (wanted && name && (wanted.includes(name) || name.includes(wanted))) score += 5;
-        if (value.tokenId || value.entityId || value.monsterId || value.characterId) score += 3;
-        if (value.imageUrl || value.imageKey || value.avatarUrl) score += 1;
-        if (!best || score > best.score) best = { score, point };
-      }
-      if (Array.isArray(value)) {
-        value.slice(0, 160).forEach(child => walk(child, depth + 1));
-        return;
-      }
-      for (const [key, child] of Object.entries(value)) {
-        if (["return", "sibling", "stateNode", "_owner"].includes(key)) continue;
-        if (child && typeof child === "object") walk(child, depth + 1);
-      }
-    };
-    for (const root of roots) walk(root, 0);
-    return best?.score >= 4 ? best.point : null;
-  }
-
-  function mapCanvasRect() {
-    const canvases = [...document.querySelectorAll("canvas")]
-      .map(el => ({ el, rect: el.getBoundingClientRect?.() }))
-      .filter(item => item.rect && item.rect.width >= 240 && item.rect.height >= 180)
-      .sort((a, b) => (b.rect.width * b.rect.height) - (a.rect.width * a.rect.height));
-    return canvases[0]?.rect || null;
-  }
-
-  function harvestTokenLabelCalibrationAnchors() {
-    const canvasRect = mapCanvasRect();
-    if (!canvasRect || !runtimeSceneTokenIndex.size) return;
-    const recentTokens = [...runtimeSceneTokenIndex.values()]
-      .filter(item => item?.position && item?.name && Date.now() - Number(item.seenAt || 0) < 10 * 60 * 1000);
-    const byName = new Map();
-    for (const item of recentTokens) {
-      const key = normalizeIndexName(item.name);
-      if (!key) continue;
-      const list = byName.get(key) || [];
-      list.push(item);
-      byName.set(key, list);
-    }
-    // Ambiguous duplicate names are intentionally skipped. A wrong anchor is
-    // much worse than asking for a native calibration action.
-    const unique = new Map([...byName.entries()].filter(([, items]) => items.length === 1));
-    if (!unique.size) return;
-
-    const candidates = [...document.querySelectorAll("span,div,p")];
-    const bestByName = new Map();
-    for (const el of candidates) {
-      if (el.closest?.('aside,[role="dialog"],[class*="browser" i],[class*="gameLog" i],[class*="initiative" i],[class*="toolbar" i],[class*="sidebar" i]')) continue;
-      const text = normalizeIndexName(el.textContent || "");
-      if (!unique.has(text)) continue;
-      const rect = el.getBoundingClientRect?.();
-      if (!rect || rect.width < 6 || rect.height < 6 || rect.width > 320 || rect.height > 90) continue;
-      const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-      if (cx < canvasRect.left || cx > canvasRect.right || cy < canvasRect.top || cy > canvasRect.bottom) continue;
-      const area = rect.width * rect.height;
-      const prev = bestByName.get(text);
-      // Prefer the smallest exact-text element; parent wrappers often contain
-      // the same text but have a much larger rect.
-      if (!prev || area < prev.area) bestByName.set(text, { el, rect, area });
-    }
-    for (const [name, match] of bestByName) {
-      const token = unique.get(name)?.[0];
-      if (!token?.position) continue;
-      const rect = match.rect;
-      addMapCalibrationAnchor(rect.left + rect.width / 2, rect.top + rect.height / 2, token.position, "token-label");
-    }
-  }
-
-  function harvestDomCalibrationAnchors() {
-    const candidates = [...document.querySelectorAll("img")].filter(img => {
-      const r = img.getBoundingClientRect?.();
-      return r && r.width >= 22 && r.width <= 140 && r.height >= 22 && r.height <= 140 &&
-        r.left >= 0 && r.top >= 40 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
-    }).slice(0, 80);
-    for (const img of candidates) {
-      const rect = img.getBoundingClientRect();
-      const roots = reactRoots(img);
-      if (!roots.length) continue;
-      const point = positionCandidateFromRoots(roots, nearbyName(img));
-      if (point) addMapCalibrationAnchor(rect.left + rect.width / 2, rect.top + rect.height / 2, point, "react-dom");
-    }
-  }
-
-  function resolveMapPoint(clientX, clientY) {
-    // v0.3.26: first try automatic map calibration; if unavailable, UI instructs one Ping (X) to activate sticker drops
-    // or token movement when the camera object is reachable from the React tree.
-    const fromCamera = cameraMapPoint(clientX, clientY);
-    if (fromCamera) return fromCamera;
-
-    // Second path: pair visible token-name labels with the native world positions
-    // already present in the scene snapshot. Two or more labels are enough to
-    // derive the current pan/zoom transform without any manual calibration.
-    harvestTokenLabelCalibrationAnchors();
-    harvestDomCalibrationAnchors();
-    return calibratedMapPoint(clientX, clientY) || converterMapPoint(clientX, clientY);
-  }
-
   function parseWsMessage(data) {
     try {
       if (typeof data === "string") return JSON.parse(data);
       if (data instanceof ArrayBuffer) return JSON.parse(new TextDecoder().decode(data));
     } catch {}
     return null;
-  }
-
-  function nativeStickerIsDeleted(payload, type = "") {
-    if (/STICKER.*(?:DELETE|REMOVE|DESTROY)/i.test(String(type || ""))) return true;
-    const scopes = [payload, payload?.sticker, payload?.data, payload?.patch, payload?.changes].filter(Boolean);
-    return scopes.some(scope => Boolean(scope?.deleted || scope?.isDeleted || scope?.removed || scope?.isRemoved || scope?.destroyed || scope?.isDestroyed || scope?.tombstone));
-  }
-
-  function stickerObjectId(value) {
-    if (!value || typeof value !== "object") return "";
-    const scopes = [value, value?.sticker, value?.data, value?.patch, value?.changes].filter(Boolean);
-    for (const scope of scopes) {
-      const raw = scope.id ?? scope.stickerId ?? scope.stickerID ?? scope.entityId ?? scope.overlayId;
-      if (raw != null && raw !== "") return String(raw);
-    }
-    return "";
-  }
-
-  function normalizeNativeStickerPayload(payload) {
-    if (!payload || typeof payload !== "object") return null;
-    const scopes = [
-      payload,
-      payload?.sticker,
-      payload?.data,
-      payload?.patch,
-      payload?.changes,
-      payload?.transform,
-      payload?.geometry,
-      payload?.properties
-    ].filter(Boolean);
-    const first = (...keys) => {
-      for (const scope of scopes) {
-        for (const key of keys) {
-          if (scope?.[key] != null) return scope[key];
-        }
-      }
-      return undefined;
-    };
-    const id = stickerObjectId(payload);
-    let position = first("position", "mapPosition", "worldPosition", "coordinates");
-    if (!Array.isArray(position)) {
-      const x = first("x", "positionX", "worldX");
-      const y = first("y", "positionY", "worldY");
-      if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) position = [Number(x), Number(y)];
-    }
-    let hidden = first("hidden", "isHidden");
-    const visible = first("visible", "isVisible");
-    if (hidden == null && visible != null) hidden = !Boolean(visible);
-    return {
-      id,
-      name: first("name"),
-      type: first("type"),
-      imageKey: first("imageKey"),
-      thumbnailKey: first("thumbnailKey"),
-      imageUrl: first("imageUrl"),
-      aspectRatio: first("aspectRatio"),
-      size: first("size", "scale"),
-      rotation: first("rotation", "angle"),
-      hidden,
-      locked: first("locked", "isLocked"),
-      position: Array.isArray(position) ? position.slice(0, 2).map(Number) : undefined
-    };
-  }
-
-  function emitNativeStickerState(payload, type = "STICKER_UPSERT", direction = "native", force = false) {
-    const sticker = normalizeNativeStickerPayload(payload);
-    if (!sticker?.id) return;
-    if (nativeStickerIsDeleted(payload, type)) {
-      postBridge("CUSTOM_STICKER_REMOVED_NATIVE", { id: String(sticker.id), direction, eventType: type });
-      return;
-    }
-    const imageKey = String(sticker?.imageKey || sticker?.thumbnailKey || "");
-    const looksSticker = /sticker/i.test(String(type))
-      || /sticker/i.test(imageKey)
-      || (Array.isArray(sticker?.position) && (sticker?.aspectRatio != null || sticker?.size != null));
-    if (!looksSticker && !force) return;
-    postBridge("CUSTOM_STICKER_NATIVE_UPSERT", {
-      direction,
-      eventType: type,
-      sticker
-    });
-  }
-
-  function harvestKnownCustomStickerStates(root, direction = "native", maxDepth = 6, budgetLimit = 3500) {
-    if (!root || typeof root !== "object" || !customStickerIds.size) return;
-    const seen = new WeakSet();
-    let budget = budgetLimit;
-    const rootType = String(root?.type || "");
-    const directPayload = root?.payload;
-    if (/(?:DELETE|REMOVE|DESTROY)/i.test(rootType) && (typeof directPayload === "string" || typeof directPayload === "number")) {
-      const directId = String(directPayload);
-      if (customStickerIds.has(directId)) postBridge("CUSTOM_STICKER_REMOVED_NATIVE", { id: directId, direction, eventType: rootType });
-    }
-    const walk = (value, depth = 0, inheritedType = rootType) => {
-      if (!value || typeof value !== "object" || depth > maxDepth || budget-- <= 0 || seen.has(value)) return;
-      seen.add(value);
-      const type = String(value?.type || inheritedType || "");
-      const id = stickerObjectId(value);
-      if (id && customStickerIds.has(id)) {
-        if (nativeStickerIsDeleted(value, type) || /(?:DELETE|REMOVE|DESTROY)/i.test(type)) {
-          postBridge("CUSTOM_STICKER_REMOVED_NATIVE", { id, direction, eventType: type });
-        } else {
-          emitNativeStickerState(value, type || "CUSTOM_STICKER_STATE", direction, true);
-        }
-      }
-      const payload = value?.payload;
-      if (payload && typeof payload === "object") {
-        const payloadId = stickerObjectId(payload);
-        if (payloadId && customStickerIds.has(payloadId)) {
-          if (nativeStickerIsDeleted(payload, type) || /(?:DELETE|REMOVE|DESTROY)/i.test(type)) {
-            postBridge("CUSTOM_STICKER_REMOVED_NATIVE", { id: payloadId, direction, eventType: type });
-          } else {
-            emitNativeStickerState(payload, type || "CUSTOM_STICKER_STATE", direction, true);
-          }
-        }
-      }
-      if (Array.isArray(value)) {
-        for (const child of value.slice(0, 300)) walk(child, depth + 1, inheritedType);
-        return;
-      }
-      for (const [key, child] of Object.entries(value)) {
-        if (["return", "sibling", "stateNode", "_owner"].includes(key)) continue;
-        if (child && typeof child === "object") walk(child, depth + 1, type);
-      }
-    };
-    walk(root, 0, rootType);
-  }
-
-  function harvestNativeStickerStates(root, direction = "native", maxDepth = 7, budgetLimit = 5000) {
-    if (!root || typeof root !== "object") return;
-    const seen = new WeakSet();
-    let budget = budgetLimit;
-    const walk = (value, depth = 0, parentType = "") => {
-      if (!value || typeof value !== "object" || depth > maxDepth || budget-- <= 0 || seen.has(value)) return;
-      seen.add(value);
-      const type = String(value?.type || parentType || "");
-      if (value?.payload && typeof value.payload === "object" && /STICKER/i.test(type)) emitNativeStickerState(value.payload, type, direction);
-      if (value?.id && (value?.imageKey || value?.thumbnailKey) && (Array.isArray(value?.position) || value?.size != null)) emitNativeStickerState(value, type || "SNAPSHOT_STICKER", direction);
-      if (Array.isArray(value)) {
-        for (const child of value.slice(0, 300)) walk(child, depth + 1, parentType);
-        return;
-      }
-      for (const [key, child] of Object.entries(value)) {
-        if (["return", "sibling", "stateNode", "_owner"].includes(key)) continue;
-        if (child && typeof child === "object") walk(child, depth + 1, type);
-      }
-    };
-    walk(root, 0, String(root?.type || ""));
   }
 
   function observeMapSocket(socket) {
@@ -1136,10 +669,6 @@
     socket.addEventListener("open", () => {
       ddbDiag.opens++;
       ddbDiagLog("socket-open", { readyState: socket.readyState });
-      if (socket === ddbMapSocket) {
-        ddbSocketReadyPosted = false;
-        setTimeout(() => postBridge("MAP_SOCKET_READY"), 80);
-      }
     });
     socket.addEventListener("close", event => {
       ddbDiag.closes++;
@@ -1163,17 +692,6 @@
           observeSceneLifecycleMessage(msg);
           harvestEntities(msg, "ws-incoming", 10, 12000);
           harvestSceneTokenCandidates(msg, `ws-incoming:${String(msg?.type || "")}`, 10, 12000);
-          harvestNativeStickerStates(msg, "incoming", 8, 7000);
-          harvestKnownCustomStickerStates(msg, "incoming", 8, 7000);
-        }
-        const type = String(msg?.type || "");
-        if (!type || /^(PONG|PING)$/i.test(type)) return;
-        if (/JOIN|CONNECT|RECONNECT|PRESENCE|SESSION|SUBSCRIB|SYNC|SNAPSHOT|STATE|ROOM|MEMBER|USER|PLAYER|PARTICIPANT|CLIENT/i.test(type)) {
-          const now = Date.now();
-          if (now - ddbLastPeerSignal > 3500) {
-            ddbLastPeerSignal = now;
-            postBridge("MAP_PEER_RECONNECT", { eventType: type });
-          }
         }
       } catch (error) {
         ddbDiag.errors++;
@@ -1189,7 +707,6 @@
     const workStartedAt = isDdbMapSocket ? performance.now() : 0;
     try {
       if (isDdbMapSocket) {
-        if (ddbMapSocket !== this) ddbSocketReadyPosted = false;
         ddbMapSocket = this;
         observeMapSocket(this);
         const msg = parseWsMessage(data);
@@ -1197,25 +714,10 @@
           observeSceneLifecycleMessage(msg);
           harvestEntities(msg, "ws-outgoing", 10, 12000);
           harvestSceneTokenCandidates(msg, `ws-outgoing:${String(msg?.type || "")}`, 10, 12000);
-          harvestNativeStickerStates(msg, "outgoing", 8, 7000);
-          harvestKnownCustomStickerStates(msg, "outgoing", 8, 7000);
         }
         if (msg?.meta?.clientId) ddbMapClientId = msg.meta.clientId;
         if (Number.isFinite(Number(msg?.meta?.clientActionIndex))) {
           ddbMapActionIndex = Math.max(ddbMapActionIndex, Number(msg.meta.clientActionIndex));
-        }
-        if (Array.isArray(msg?.payload?.position) && msg.payload.position.length >= 2) {
-          ddbLastPingPosition = msg.payload.position.slice(0, 2);
-          const type = String(msg?.type || "");
-          if (lastPointerSample && Date.now() - lastPointerSample.at < 1200 && /PING|TOKEN|STICKER|POINT|OVERLAY/i.test(type)) {
-            addMapCalibrationAnchor(lastPointerSample.x, lastPointerSample.y, msg.payload.position, `ws:${type}`);
-          }
-        }
-        if (ddbMapClientId && !ddbSocketReadyPosted) {
-          ddbSocketReadyPosted = true;
-          setTimeout(() => {
-            postBridge("MAP_SOCKET_READY");
-          }, 50);
         }
       }
     } catch (error) {
@@ -1231,58 +733,6 @@
 
   function postBridge(type, extra = {}) {
     try { window.postMessage({ source: "ddb-qol-page", type, ...extra }, location.origin); } catch {}
-  }
-
-  function sendCustomSticker(payload) {
-    if (!ddbMapSocket || ddbMapSocket.readyState !== WebSocket.OPEN) {
-      postBridge("CUSTOM_STICKER_ERROR", { message: "Para ativar o drop de stickers: pressione X e faça 1 Ping em qualquer ponto do mapa. Depois arraste o sticker novamente." });
-      return;
-    }
-    if (!ddbMapClientId) {
-      postBridge("CUSTOM_STICKER_ERROR", { message: "Para ativar o drop de stickers: pressione X e faça 1 Ping em qualquer ponto do mapa. Depois arraste o sticker novamente." });
-      return;
-    }
-    const position = Array.isArray(payload?.position) && payload.position.length >= 2
-      ? payload.position.slice(0, 2).map(Number)
-      : (ddbLastPingPosition ? ddbLastPingPosition.slice(0, 2) : [0, 0]);
-    const outgoingId = String(payload?.id || crypto.randomUUID());
-    customStickerIds.add(outgoingId);
-    const msg = {
-      type: "STICKER_UPSERT",
-      meta: {
-        source: "CLIENT",
-        clientNow: Date.now(),
-        clientActionIndex: ++ddbMapActionIndex,
-        clientId: ddbMapClientId
-      },
-      payload: {
-        id: outgoingId,
-        name: String(payload?.name || "Custom Sticker").slice(0, 100),
-        type: "rectangle",
-        // DDB currently expects catalog keys to exist, but imageUrl takes precedence in Sticker.tsx.
-        imageKey: String(payload?.imageKey || "official/stickers/br-2024/map_and_utility-arrow_down.png"),
-        thumbnailKey: String(payload?.thumbnailKey || "thumbnails/official/stickers/br-2024/map_and_utility-arrow_down.png"),
-        imageUrl: String(payload?.imageUrl || ""),
-        aspectRatio: Math.max(0.02, Number(payload?.aspectRatio) || 1),
-        size: Math.max(0.1, Number(payload?.size) || 1.5),
-        rotation: Number(payload?.rotation) || 0,
-        hidden: Boolean(payload?.hidden),
-        locked: Boolean(payload?.locked),
-        position
-      },
-      state: "FULFILLED"
-    };
-    try {
-      originalWsSend.call(ddbMapSocket, JSON.stringify(msg));
-      postBridge("CUSTOM_STICKER_SENT", {
-        id: msg.payload.id,
-        rehydrate: Boolean(payload?.rehydrate),
-        silent: Boolean(payload?.silent),
-        sticker: { ...msg.payload, libraryId: String(payload?.libraryId || ""), imageUrl: String(payload?.imageUrl || "") }
-      });
-    } catch (error) {
-      postBridge("CUSTOM_STICKER_ERROR", { message: error instanceof Error ? error.message : String(error) });
-    }
   }
 
   function valueName(obj) {
@@ -1773,9 +1223,6 @@
     const sourceText = String(source || "");
     if (/STICKER|OVERLAY|POINT|PING|DRAW|REVEAL|PIN/i.test(sourceText)) return true;
 
-    const id = tokenIdFromValue(value);
-    if (id && customStickerIds.has(String(id))) return true;
-
     const kind = [
       value.type, value.kind, value.itemType, value.mapItemType, value.objectType,
       value.entityType, value.gameElementType, value.contentType
@@ -2070,24 +1517,6 @@
 
   window.addEventListener("message", event => {
     if (event.source !== window || event.origin !== location.origin || event.data?.source !== "ddb-qol-content") return;
-    if (event.data.type === "SYNC_CUSTOM_STICKER_IDS") {
-      customStickerIds.clear();
-      for (const id of Array.isArray(event.data.ids) ? event.data.ids : []) {
-        if (id != null && id !== "") customStickerIds.add(String(id));
-      }
-    }
-    if (event.data.type === "SEND_CUSTOM_STICKER") sendCustomSticker(event.data.payload || {});
-    if (event.data.type === "RESOLVE_MAP_POINT") {
-      const requestId = String(event.data.requestId || "");
-      const clientX = Number(event.data.clientX);
-      const clientY = Number(event.data.clientY);
-      const position = Number.isFinite(clientX) && Number.isFinite(clientY) ? resolveMapPoint(clientX, clientY) : null;
-      postBridge("MAP_POINT_RESOLVED", {
-        requestId,
-        position,
-        error: position ? "" : "Para ativar o drop de stickers: pressione X e faça 1 Ping em qualquer ponto do mapa. Depois arraste o sticker novamente."
-      });
-    }
     if (event.data.type === "REQUEST_LAST_DAMAGE") {
       markDamageMessages();
       if (latestDamageCompact) postBridge("GAME_LOG_DAMAGE", { message: latestDamageCompact, replay: true });
@@ -2108,25 +1537,14 @@
     }
     if (event.data.type === "REQUEST_DIAGNOSTIC_STATUS") {
       const requestId = String(event.data.requestId || "");
-      const rect = mapCanvasRect();
-      let stickerDropReady = false;
-      if (rect) {
-        const x = rect.left + rect.width / 2;
-        const y = rect.top + rect.height / 2;
-        stickerDropReady = Boolean(cameraMapPoint(x, y) || calibratedMapPoint(x, y) || converterMapPoint(x, y));
-      }
-      const recentAnchors = mapCalibrationAnchors.filter(anchor => Date.now() - anchor.at < 30 * 60 * 1000);
       postBridge("DIAGNOSTIC_STATUS", {
         requestId,
         status: {
           bridgeLoaded: true,
-          mapSocketReady: Boolean(ddbMapSocket?.readyState === WebSocket.OPEN && ddbMapClientId),
-          stickerDropReady,
-          calibrationAnchors: recentAnchors.length
+          mapSocketReady: Boolean(ddbMapSocket?.readyState === WebSocket.OPEN && ddbMapClientId)
         }
       });
     }
-    if (event.data.type === "REQUEST_MAP_SOCKET_READY" && ddbMapSocket?.readyState === WebSocket.OPEN && ddbMapClientId) postBridge("MAP_SOCKET_READY");
     if (event.data.type === "ANNOTATE_MAP_ORDER") annotateMapOrder();
     if (event.data.type === "ANNOTATE_HP_TARGETS") markHpTargets();
   });
